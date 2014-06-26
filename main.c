@@ -142,14 +142,31 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		for (i = 0; i < tcpdata->length; i++) {
 			if (tcpdata->val[i].masked) 
 				continue;
-			// the estats->val is a struct which indicated which type of integer value it
-			// is but json doesn't care about that so I'm pushing everything over as the 
-			// same value type (unsighed 64) this *seems* to work. My guess is that
-			// it's all being converted into a string anyway. if that fails at anypoint
-			// go back and reinstert the switch statement form any of the userland utilities
-			//json_push_back(c, json_new_i(estats_var_array[i].name, tcpdata->val[i].uv64));
-			json_object *estats_val = json_object_new_int(tcpdata->val[i].uv64);
-			json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+			json_object *estats_val;
+			switch(estats_var_array[i].valtype) {
+			case ESTATS_UNSIGNED64:
+				estats_val = json_object_new_int64(tcpdata->val[i].uv64);
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+				break;
+			case ESTATS_UNSIGNED32:
+				estats_val = json_object_new_int64(tcpdata->val[i].uv32);
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+				break;
+			case ESTATS_SIGNED32:
+				estats_val = json_object_new_int64(tcpdata->val[i].sv32);
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+				break;
+			case ESTATS_UNSIGNED16:
+				estats_val = json_object_new_int64(tcpdata->val[i].uv16);
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+				break;
+			case ESTATS_UNSIGNED8:
+				estats_val = json_object_new_int64(tcpdata->val[i].uv8);
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+				break;
+			default:
+				break;
+			}
 		}
 		// add the connection data to the primary container tagged with the connection id
 		json_object_array_add(data_array, connection_data);
@@ -161,8 +178,8 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
        	// convert the json object to a string
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
-	//*message =  (char *)json_object_to_json_string(jsonout);
 	
+	printf("%s\n\n", *message);
 	// free the json object from the root node
 	json_object_put(jsonout);
 
@@ -175,7 +192,7 @@ Cleanup:
 		PRINT_AND_FREE(err);
                 printf ("EXIT_FAILURE");
         }
-        
+
         return;
 }
 
@@ -286,7 +303,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 		return NULL;
 	}
 	getConnData(&message, ports, num, filter, ips, cid);
-	printf("%s",message);
+	printf("message length: %d",(int)strlen(message));
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
 	// free the inbound jason object and token
