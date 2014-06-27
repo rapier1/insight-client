@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <websock/websock.h> // websocket lib
-#include <json/json.h>
+#include <json-c/json.h>
 #include "estats/debug-int.h"
 #include "scripts.h"
 #include "main.h"

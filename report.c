@@ -14,7 +14,7 @@
  * if not, see http://opensource.org/licenses/MIT.
  *
  */
-#include <json/json.h>
+#include <json-c/json.h>
 #include <stdio.h>
 #include <string.h>
 #include "report.h"
@@ -105,6 +105,6 @@ void report_dump(reportinfo *report_t) {
 // and build a valid sql query, submit it to the db, and alert the NOC
 int report_sql(reportinfo *report_t, char *message) {
   
-
+  return 0;
 }
 
