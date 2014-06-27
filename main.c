@@ -41,7 +41,7 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
         struct estats_connection_tuple_ascii asc;
 	estats_val_data* tcpdata = NULL;
 	char time[20];
-	int sport, dport, i, flag = 0;
+	int sport, dport, i, flag, maxconn, shownconn = 0;
 	
 
 	struct estats_mask mask;
@@ -70,13 +70,14 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 	
 	// step through the list of clients
 	list_for_each(&clist->connection_head, cp, list) {
+		maxconn++; // total number of connections processed including skipped connections
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
 		
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
-                Chk2(estats_connection_tuple_as_strings(&asc, ct));
-		Chk2(estats_read_vars(tcpdata, atoi(asc.cid), cl));
+                Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
+		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
 		
 		// what sort of data filtering will we be using
 		switch (filter) {
@@ -142,35 +143,36 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		for (i = 0; i < tcpdata->length; i++) {
 			if (tcpdata->val[i].masked) 
 				continue;
-			json_object *estats_val;
+
+			// this switch is likely unnecessary as all estat ints are cast to 
+			// int64 however, just to be on the safe side I've implemented this
+			json_object *estats_val = NULL;
 			switch(estats_var_array[i].valtype) {
 			case ESTATS_UNSIGNED64:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv64);
-				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
 				break;
 			case ESTATS_UNSIGNED32:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv32);
-				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
 				break;
 			case ESTATS_SIGNED32:
 				estats_val = json_object_new_int64(tcpdata->val[i].sv32);
-				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
 				break;
 			case ESTATS_UNSIGNED16:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv16);
-				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
 				break;
 			case ESTATS_UNSIGNED8:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv8);
-				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
 				break;
 			default:
 				break;
-			}
-		}
+			} //end switch
+			if (estats_val != NULL) 
+				json_object_object_add(connection_data,estats_var_array[i].name, estats_val);
+		} //end for loop
 		// add the connection data to the primary container tagged with the connection id
 		json_object_array_add(data_array, connection_data);
-	Continue:       
+		shownconn++; // how many connections we actually processed the tcpdata of
+Continue:       
 		while(0) {}
 	}
 	json_object_object_add(jsonout, "DATA", data_array); 
@@ -178,8 +180,8 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
        	// convert the json object to a string
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
-	
-	printf("%s\n\n", *message);
+
+	printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
 
