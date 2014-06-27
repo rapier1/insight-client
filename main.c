@@ -31,6 +31,9 @@
 #include "string-funcs.h"
 #include "parse.h"
 #include "report.h"
+#include "geoip.h"
+
+MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
 
 // taken from web10g logger and expanded upon in order to build a JSON data structure
 void getConnData (char **message, int skips[], int num, int filter, char** ips, int rcid) {
@@ -138,6 +141,17 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		json_object *jtime = json_object_new_string(time);
 		json_object_object_add(connection_data, "time", jtime);
 
+		// get the latitude and longitude of the remote address
+		double latitude = geoip_lat_or_long(asc.rem_addr, mmdb, "latitude");
+		double longitude = geoip_lat_or_long(asc.rem_addr, mmdb, "longitude");
+
+		// printf("%s, lat: %f, long: %f\n", asc.rem_addr, latitude, longitude);
+		json_object *jlat = json_object_new_double(latitude);
+		json_object *jlong = json_object_new_double(longitude);
+	
+		json_object_object_add(connection_data, "lat", jlat);
+		json_object_object_add(connection_data, "long", jlong);
+
 		// step through each element of the tcpdata
 		// and append it to json list that we appened back on to the head node
 		for (i = 0; i < tcpdata->length; i++) {
@@ -180,8 +194,8 @@ Continue:
        	// convert the json object to a string
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
-
-	printf("Processed %d of %d connections\n", shownconn, maxconn);
+	
+	//printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
 
@@ -305,7 +319,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 		return NULL;
 	}
 	getConnData(&message, ports, num, filter, ips, cid);
-	printf("message length: %d",(int)strlen(message));
+	printf("message length: %d\n",(int)strlen(message));
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
 	// free the inbound jason object and token
@@ -359,6 +373,14 @@ int main(int argc, char *argv[])
 	libwebsock_context *ctx = NULL;
 	char* port;
 
+	int status = MMDB_open("/home/rapier/websockets/test/GeoLite2-City.mmdb", MMDB_MODE_MMAP, &mmdb);
+	if (MMDB_SUCCESS != status) {
+	  printf("Can't open db\n");
+	  return 0;
+	}
+
+	printf ("geoIP database opened and ready\n");
+
 	if (argc != 2) {
 		port = "9000";
 	} else {
@@ -378,5 +400,6 @@ int main(int argc, char *argv[])
 	libwebsock_wait(ctx);
 	//perform any cleanup here.
 	fprintf(stderr, "Exiting.\n");
+	MMDB_close(&mmdb);
 	return 0;
 }
