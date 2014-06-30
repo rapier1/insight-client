@@ -1,0 +1,29 @@
+Mask Map for Path Table																				
+																				
+					0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+      1	RetranThresh				*		*		*		*		*		*		*		*
+      2	NonRecovDAEpisode				*	*			*	*			*	*			*	*
+      4	SumOctetsReordered						*	*	*	*					*	*	*	*
+      8	NonRecovDAEpisode										*	*	*	*	*	*	*	*
+     10	SampleRTT				*		*		*		*		*		*		*		*
+     20	RTTVar						*	*			*	*			*	*			*	*
+     40	MaxRTT								*	*	*	*					*	*	*	*
+     80	MinRTT												*	*	*	*	*	*	*	*
+    100	SumRTT					*		*		*		*		*		*		*		*
+    200	HCSumRTT					*	*			*	*			*	*			*	*
+    400	CountRTT							*	*	*	*					*	*	*	*
+    800	MaxRTO												*	*	*	*	*	*	*	*
+   1000	MinRTO					*		*		*		*		*		*		*		*
+   2000	Ipttl						*	*			*	*			*	*			*	*	
+   4000	IpTosIn								*	*	*	*					*	*	*	*
+   8000	IpTosOut											*	*	*	*	*	*	*	*
+  10000	PreCongSumCwnd				*		*		*		*		*		*		*		*
+  20000	PreCongSumRTT					*	*			*	*			*	*			*	*
+  40000	PostCongSumRTT							*	*	*	*					*	*	*	*
+  80000	PostCongCountRTT										*	*	*	*	*	*	*	*
+ 100000	ECBsinglan				* 		*		*		*		*		*		*		*
+ 200000	DupAckEpisodes					*	*			*	*			*	*			*	*
+ 400000	RcvRTT								*	*	*	*					*	*	*	*
+ 800000	DupAksOut											*	*	*	*	*	*	*	*
+1000000	CERcvd					*		*		*		*		*		*		*		*
+2000000	ECESent						*	*			*	*			*	*			*	*

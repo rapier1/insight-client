@@ -1,0 +1,46 @@
+Mask Map for Stack Table																			
+																			
+					0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+          1	ActiveOpen			*		*		*		*		*		*		*		*
+          2	MSSSent					*	*			*	*			*	*			*	*
+          4	MSSRcvd							*	*	*	*					*	*	*	*
+          8	WinScaleSent										*	*	*	*	*	*	*	*
+         10	WinScaleRcvd			*		*		*		*		*		*		*		*
+         20	TimeStamps				*	*			*	*			*	*			*	*
+         40	ECN							*	*	*	*					*	*	*	*
+         80	WillSendSACK										*	*	*	*	*	*	*	*
+        100	WillUseSACK			*		*		*		*		*		*		*		*
+        200	State					*	*			*	*			*	*			*	*
+        400	Nagle							*	*	*	*					*	*	*	*
+        800	MaxSsCwnd										*	*	*	*	*	*	*	*
+       1000	MaxCaCwnd			*		*		*		*		*		*		*		*
+       2000	MaxSsthresh				*	*			*	*			*	*			*	*
+       4000	MinSsthresh						*	*	*	*					*	*	*	*
+       8000	InRecovery										*	*	*	*	*	*	*	*
+      10000	DupAcksIn			*		*		*		*		*		*		*		*
+      20000	SpuriousFrDetected			*	*			*	*			*	*			*	*
+      40000	SpuriousRtoDetected					*	*	*	*					*	*	*	*
+      80000	SoftErrors										*	*	*	*	*	*	*	*
+     100000	SoftErrorReason			* 		*		*		*		*		*		*		*
+     200000	SlowStart				*	*			*	*			*	*			*	*
+     400000	CongAvoid						*	*	*	*					*	*	*	*
+     800000	OtherReductions										*	*	*	*	*	*	*	*
+    1000000	CongOverCount			*		*		*		*		*		*		*		*
+    2000000	FastRetran				*	*			*	*			*	*			*	*
+    4000000	SubsequentTimeouts					*	*	*	*					*	*	*	*
+    8000000	CurTimeoutCount										*	*	*	*	*	*	*	*
+   10000000	AbruptTimeouts			*		*		*		*		*		*		*		*
+   20000000	SACKsRcvd				*	*			*	*			*	*			*	*
+   40000000	SACKBlocksRcvd						*	*	*	*					*	*	*	*
+   80000000	SendStall										*	*	*	*	*	*	*	*
+  100000000	DSACKDups			*		*		*		*		*		*		*		*
+  200000000	MaxMSS					*	*			*	*			*	*			*	*
+  400000000	MinMSS							*	*	*	*					*	*	*	*
+  800000000	SndInitial										*	*	*	*	*	*	*	*
+ 1000000000	RecInitial			*		*		*		*		*		*		*		*
+ 2000000000	CurRetxQueue				*	*			*	*			*	*			*	*
+ 4000000000	MaxRetxQueue						*	*	*	*					*	*	*	*
+ 8000000000	CurReasmQueue										*	*	*	*	*	*	*	*
+10000000000	MaxReasmQueue			*		*		*		*		*		*		*		*
+20000000000	EarlyRetrans				*	*			*	*			*	*			*	*
+40000000000	EarlyRetransDelay					*	*	*	*					*	*	*	*

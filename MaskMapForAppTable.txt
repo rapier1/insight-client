@@ -1,0 +1,15 @@
+Mask Map for App Table																				
+																				
+					0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+  1	SndUna					*		*		*		*		*		*		*		*
+  2	SndNxt						*	*			*	*			*	*			*	*
+  4	SndMax								*	*	*	*					*	*	*	*
+  8	ThruOctetsAcked											*	*	*	*	*	*	*	*
+ 10	HCThruOctetsAcked			*		*		*		*		*		*		*		*
+ 20	RcvNxt						*	*			*	*			*	*			*	*
+ 40	ThruOctetsReceived						*	*	*	*					*	*	*	*
+ 80	HCThruOctetsReceived										*	*	*	*	*	*	*	*
+100	CurAppWQueue				*		*		*		*		*		*		*		*
+200	MaxAppWQueue					*	*			*	*			*	*			*	*
+400	CurAppRQueue							*	*	*	*					*	*	*	*
+800	MaxAppRQueue											*	*	*	*	*	*	*	*

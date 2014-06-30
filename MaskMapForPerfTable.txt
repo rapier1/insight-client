@@ -1,0 +1,39 @@
+Mask Map for Perf Table
+
+					0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+        1 SegsOut				*		*		*		*		*		*		*		*	
+        2 DataSegsOut					*	*			*	*			*	*			*	*
+        4 DataOctetsOut							*	*	*	*					*	*	*	*
+        8 HCDataOctetsOut										*	*	*	*	*	*	*	*
+       10 SegsRetrans				*		*		*		*		*		*		*		*
+       20 OctetsRetrans					*	*			*	*			*	*			*	*
+       40 SegsIn							*	*	*	*					*	*	*	*
+       80 DataSegsIn											*	*	*	*	*	*	*	*
+      100 DataOctetsIn				*		*		*		*		*		*		*		*
+      200 HCDataOctetsIn				*	*			*	*			*	*			*	*
+      400 ElapsedSecs							*	*	*	*					*	*	*	*
+      800 ElapsedMicroSecs										*	*	*	*	*	*	*	*
+     1000 StartTimeStamp			*		*		*		*		*		*		*		*	
+     2000 CurMSS					*	*			*	*			*	*			*	*
+     4000 PipeSize							*	*	*	*					*	*	*	*
+     8000 MaxPipeSize											*	*	*	*	*	*	*	*
+    10000 SmoothedRTT				*		*		*		*		*		*		*		*	
+    20000 CurRTO					*	*			*	*			*	*			*	*
+    40000 CongSignals							*	*	*	*					*	*	*	*
+    50000 CurCwnd											*	*	*	*	*	*	*	*
+   100000 CurSsthresh				* 		*		*		*		*		*		*		*
+   200000 Timeouts					*	*			*	*			*	*			*	*	
+   400000 CurRwinSent							*	*	*	*					*	*	*	*
+   800000 MaxRwinSent											*	*	*	*	*	*	*	*
+  1000000 ZeroRwinSent				*		*		*		*		*		*		*		*	
+  2000000 CurRwinRcvd					*	*			*	*			*	*			*	*
+  4000000 MaxRwinRcvd							*	*	*	*					*	*	*	*
+  8000000 ZeroRwinRcvd											*	*	*	*	*	*	*	*
+ 10000000 SndLimTransRwin			*		*		*		*		*		*		*		*
+ 20000000 SndLimTransCwnd				*	*			*	*			*	*			*	*
+ 40000000 SndLimTransSnd						*	*	*	*					*	*	*	*
+ 80000000 SndLimTransTSODefer										*	*	*	*	*	*	*	*
+100000000 SndLimTimeRwin			*		*		*		*		*		*		*		*	
+200000000 SndLimTimeCwnd				*	*			*	*			*	*			*	*
+400000000 SndLimTimeSnd							*	*	*	*					*	*	*	*
+800000000 SndLimTimeTSODefer										*	*	*	*	*	*	*	*
