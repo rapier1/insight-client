@@ -36,7 +36,7 @@
 MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
 
 // taken from web10g logger and expanded upon in order to build a JSON data structure
-void getConnData (char **message, int skips[], int num, int filter, char** ips, int rcid) {
+void getConnData (char **message, int skips[], int num, int filter, char** ips, int rcid, char *maskstring) {
         struct estats_error* err = NULL;
         struct estats_nl_client* cl = NULL;
         struct estats_connection_list* clist = NULL;
@@ -45,10 +45,29 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 	estats_val_data* tcpdata = NULL;
 	char time[20];
 	int sport, dport, i, flag, maxconn, shownconn = 0;
-	
+	const char *defaultmask = "25124,12,410000,90,0"; //if not mask passed by client UI use this
+        char *strmask = NULL; // mask string
+        struct estats_mask mask; // mask struct
+        uint64_t tmpmask;
+        const char delim = ',';
 
-	struct estats_mask mask;
+	// all of the mask stuff should be moved into a separate function
 
+	// if no mask is passed then we set the mask to the default
+	if (maskstring != NULL) {
+		int masklength = strlen(maskstring);
+		// if the length of the mask is 0 then treat that as no passed mask
+		// otherwise it will default to a full report
+		if (masklength != 0) {
+			strmask = strdup(maskstring);
+		} else {
+			strmask = strdup(defaultmask);
+		}
+	} else {
+		strmask = strdup(defaultmask);
+	}
+
+	// initialize the mask struct
         mask.masks[0] = DEFAULT_PERF_MASK;
         mask.masks[1] = DEFAULT_PATH_MASK;
         mask.masks[2] = DEFAULT_STACK_MASK;
@@ -58,6 +77,21 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
         for (i = 0; i < MAX_TABLE; i++) {
                 mask.if_mask[i] = 0;
         }
+
+	// convert the mask string into the mask struct
+	for (i = 0; i < 5; i++) {
+		char *strtmp;
+		strtmp = strsep(&strmask, &delim);
+		if (strtmp && strlen(strtmp)) {
+			char *str;
+			str = (str = strchr(strtmp, 'x')) ? str+1 : strtmp;
+			if (sscanf(str, "%"PRIx64, &tmpmask) == 1) {
+				mask.masks[i] = tmpmask & mask.masks[i];
+				mask.if_mask[i] = 1;
+			}
+		}
+	}
+	
 
 	// get a list of the connections available
         Chk(estats_nl_client_init(&cl));
@@ -195,6 +229,7 @@ Continue:
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
 	
+	printf("%s\n\n", *message);
 	//printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
@@ -229,8 +264,10 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	json_object *json_in = NULL;
 	json_object *cmnd_obj = NULL;
 	json_object *optn_obj = NULL;
+	json_object *mask_obj = NULL;
 	enum json_tokener_error jerr;
 	reportinfo *report_t;
+	char *maskstring;
 
 	// grab the incoming json string
 	// it should be of the form 
@@ -261,7 +298,14 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// convert into a string so we can use it for the strpos later on
 	char * command = (char *)json_object_get_string(cmnd_obj);
 	printf("command is '%s'\n", command);
-		      
+
+	// get any metric mask associated with it
+	json_object_object_get_ex(json_in, "mask", &mask_obj);
+	if (mask_obj != NULL) {
+		maskstring = (char *)json_object_get_string(mask_obj);
+		printf ("mask is %s", maskstring);
+	}
+
 	// list all data
 	if (strcmp(command, "list") == 0) {
 	}
@@ -307,7 +351,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 		// dump the values to the log screen - remove for production
 		report_dump(report_t);
 		filter = 4;
-		getConnData(&message, ports, num, filter, ips, report_t->cid);
+		getConnData(&message, ports, num, filter, ips, report_t->cid, maskstring);
 		// getConnData doesn't return a json object so we'll
 		// need to convert the message back into a json object
 		// at some point
@@ -318,7 +362,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	} else {
 		return NULL;
 	}
-	getConnData(&message, ports, num, filter, ips, cid);
+	getConnData(&message, ports, num, filter, ips, cid, maskstring);
 	printf("message length: %d\n",(int)strlen(message));
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	

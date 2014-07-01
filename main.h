@@ -16,7 +16,7 @@
  */
 
 #include <websock/websock.h> // websocket lib                                                                                                                                          
-void getConnData (char **, int [], int, int, char**, int);
+void getConnData (char **, int [], int, int, char**, int, char *);
 void *analyzeInbound(libwebsock_client_state *, libwebsock_message *);
 int onmessage(libwebsock_client_state *, libwebsock_message *);
 int onopen(libwebsock_client_state *);
