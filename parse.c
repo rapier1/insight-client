@@ -144,6 +144,8 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 	char * options;
 	char * mask;
 	int incflag = 0;
+	int i;
+	char * empty = "\0";
 	enum json_type type;
 	json_object_object_foreach(jobj, key, val) { /*Passing through every array element*/
 		type = json_object_get_type(val);
@@ -185,5 +187,25 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 			json_parse_array(jobj, key, comlist);
 			break;
 		}
+	}
+	// we need to make sure every element of comlist is properly initialized
+	// there are cases in which we may have a command with no options or where
+	// mask is not set. As such we want to put null strings in there
+	for (i = 0; i <= comindex; i++) {
+	  if (comlist->options[i] == NULL) {
+	    printf("empty option\n");
+	    comlist->options[i] = malloc(1  * sizeof(char));
+	    strcpy(comlist->options[i], empty);
+	  }
+	  if (comlist->commands[i] == NULL) {
+	    printf("empty command\n");
+	    comlist->commands[i] = malloc(1  * sizeof(char));
+	    strcpy(comlist->commands[i], empty);
+	  }
+	}
+	if (comlist->mask == NULL) {
+	  printf("empty mask\n");
+	  comlist->mask = malloc(1 *sizeof(char));
+	  strcpy(comlist->mask, empty);
 	}
 } 

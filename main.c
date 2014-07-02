@@ -35,6 +35,8 @@
 
 MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
 
+extern int comindex;
+
 // taken from web10g logger and expanded upon in order to build a JSON data structure
 void getConnData (char **message, int skips[], int num, int filter, char** ips, int rcid, char *maskstring) {
         struct estats_error* err = NULL;
@@ -60,6 +62,7 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		// otherwise it will default to a full report
 		if (masklength != 0) {
 			strmask = strdup(maskstring);
+			printf("pointerA = %p\n", strmask);
 		} else {
 			strmask = strdup(defaultmask);
 		}
@@ -91,14 +94,16 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 			}
 		}
 	}
-	
+
+	printf("pointerB = %p\n", strmask);
+	free(strmask);
 
 	// get a list of the connections available
         Chk(estats_nl_client_init(&cl));
         Chk(estats_connection_list_new(&clist));
 	Chk(estats_nl_client_set_mask(cl, &mask));
         Chk(estats_list_conns(clist, cl));
-	Chk(estats_connection_list_add_info(clist));
+	//	Chk(estats_connection_list_add_info(clist));
 
 	// create the tcpdata struct
 	Chk(estats_val_data_new(&tcpdata));
@@ -112,9 +117,9 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		maxconn++; // total number of connections processed including skipped connections
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
-		struct estats_connection_info* ci = (struct estats_connection_info*) cl;
+		//struct estats_connection_info* ci = (struct estats_connection_info*) cl;
 	
-		printf("cmd: %s\n", ci->cmdline);
+		//printf("cmd: %s\n", ci->cmdline);
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
                 Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
@@ -234,7 +239,7 @@ Continue:
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
 	
-	printf("%s\n\n", *message);
+	//	printf("%s\n\n", *message);
 	//printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
@@ -272,7 +277,9 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	json_object *mask_obj = NULL;
 	enum json_tokener_error jerr;
 	reportinfo *report_t;
-	char *maskstring;
+	char *maskstring = '\0';
+	CommandList *comlist;
+	comindex = 0; // have top make sure to reste this for each message
 
 	// grab the incoming json string
 	// it should be of the form 
@@ -296,7 +303,20 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 		fprintf(stderr, "Poorly formed JSON object. Check for extraneous characters.");
 		return NULL;
 	}	 
+
+
 	// we now have a validated inbound json object. 
+	// fill the comlist struct with our incoming request
+	comlist = malloc(sizeof(CommandList));
+	json_parse(json_in, comlist);
+	
+	printf ("comindex is %d\n", comindex);
+	for (i = 0 ; i < comindex; i++) {
+	  printf ("command[%d] = %s:%s\n", i, comlist->commands[i], comlist->options[i]);
+	}
+	if (comlist->mask != NULL)
+	  printf ("mask: %s\n", comlist->mask);
+				
 	// use that object and pass a reference to it to the command 
 	json_object_object_get_ex(json_in, "command", &cmnd_obj);
 
@@ -308,7 +328,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	json_object_object_get_ex(json_in, "mask", &mask_obj);
 	if (mask_obj != NULL) {
 		maskstring = (char *)json_object_get_string(mask_obj);
-		printf ("mask is %s", maskstring);
+		printf ("mask is %s\n", maskstring);
 	}
 
 	// list all data
@@ -371,10 +391,18 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	printf("message length: %d\n",(int)strlen(message));
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
+	for (i = 0; i < comindex; i++) {
+	  free(comlist->commands[i]);
+	  free(comlist->options[i]);
+	}
+	free(comlist->mask);
+	free(comlist);
+
 	// free the inbound jason object and token
 	json_object_put(json_in);
 	json_tokener_free(tok);
 	free(message);
+
 
 	// if we used ip filter we need to free the memory. 
 	if (free_flag) {
