@@ -98,6 +98,8 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
         Chk(estats_connection_list_new(&clist));
 	Chk(estats_nl_client_set_mask(cl, &mask));
         Chk(estats_list_conns(clist, cl));
+	Chk(estats_connection_list_add_info(clist));
+
 	// create the tcpdata struct
 	Chk(estats_val_data_new(&tcpdata));
 	
@@ -110,12 +112,15 @@ void getConnData (char **message, int skips[], int num, int filter, char** ips, 
 		maxconn++; // total number of connections processed including skipped connections
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
-		
+		struct estats_connection_info* ci = (struct estats_connection_info*) cl;
+	
+		printf("cmd: %s\n", ci->cmdline);
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
                 Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
-		
+	      
+
 		// what sort of data filtering will we be using
 		switch (filter) {
 		case 1: 

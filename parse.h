@@ -15,8 +15,17 @@
  *
  */
 
+
+typedef struct CommandList {
+	char *commands[10];
+	char *options[10];
+	char *mask;
+} CommandList;
+
 int includePort (int, int, int [], int);
 int excludePort (int, int, int [], int);
 int filterIPs( char*, char*, char**, int);
 int parsePorts (int [], char *);
 int parseIPs(char** , char *);
+void json_parse_array (json_object *, char *, struct CommandList *);
+void json_parse (json_object *, struct CommandList *);

@@ -25,6 +25,10 @@
 #include <string.h>
 #include "scripts.h"
 #include "string-funcs.h"
+#include <json-c/json.h>
+#include "parse.h"
+
+int comindex = 0;
 
 // if the dest port or source port exists in the array of ports
 // then return a 0. This sets the flag to zero and ensures that the
@@ -115,3 +119,71 @@ int parseIPs(char** ips, char *inbound) {
         free(strCpy);
         return mynum;
 }
+
+void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist) {
+	void json_parse(json_object * jobj, struct CommandList *comlist); /*Forward Declaration*/
+	json_object *jarray = jobj; /*Simply get the array*/
+	if(key) {
+		json_object_object_get_ex(jobj, key, &jarray); /*Getting the array if it is a key value pair*/
+	}
+	
+	int arraylen = json_object_array_length(jarray); /*Getting the length of the array*/
+	int i;
+	json_object * jvalue;
+	
+	for (i=0; i< arraylen; i++){
+		jvalue = json_object_array_get_idx(jarray, i); /*Getting the array element at position i*/
+		json_parse(jvalue, comlist);
+	}
+}
+
+
+/*Parsing the json object*/
+void json_parse(json_object * jobj, struct CommandList *comlist) {
+	char * command;
+	char * options;
+	char * mask;
+	int incflag = 0;
+	enum json_type type;
+	json_object_object_foreach(jobj, key, val) { /*Passing through every array element*/
+		type = json_object_get_type(val);
+		if(strcmp(key, "command") == 0) {
+			command = (char *)json_object_get_string(val);
+			comlist->commands[comindex] = malloc((strlen(command)+1) * sizeof(char));
+			strcpy(comlist->commands[comindex], command);
+			//we need in increment i but only when we see a command
+			//and an option so if incflag = 2 then we increment i
+			incflag++;
+		}
+		if(strcmp(key, "options") == 0) {
+			options = (char *)json_object_get_string(val);
+			comlist->options[comindex] = malloc((strlen(options)+1) * sizeof(char));
+			strcpy(comlist->options[comindex], options);
+			incflag++;
+		}
+		if(strcmp(key, "mask") == 0) {
+			mask = (char *)json_object_get_string(val);
+			comlist->mask = malloc((strlen(mask)+1) * sizeof(char));
+			strcpy(comlist->mask, mask);
+		}
+		if (incflag == 2) {
+			incflag = 0;
+			comindex++;
+		}
+		switch (type) {
+		case json_type_null:
+		case json_type_boolean: 
+		case json_type_double: 
+		case json_type_int: 
+		case json_type_string:
+			break; 
+		case json_type_object: 
+			json_object_object_get_ex(jobj, key, &jobj);
+			json_parse(jobj, comlist); 
+			break;
+		case json_type_array: 
+			json_parse_array(jobj, key, comlist);
+			break;
+		}
+	}
+} 
