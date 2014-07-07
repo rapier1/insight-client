@@ -69,60 +69,6 @@ int filterIPs( char* local, char* remote, char** ips, int index) {
 	return 1;
 }
 
-// take a string and see if there is CSV list of ports we 
-// export the resulting array for use elsewhere
-int parsePorts (int ports[], char *inbound) {
-	char* strCpy;
-	char** split; // array for the results
-	int mynum; // number of elements in the returned array
-	int i;
-	
-	// create a copy of the string
-	strCpy = malloc( (strlen(inbound)+1) * sizeof( *strCpy ) );
-	strcpy( strCpy, inbound );
-	//printf("ParsePorts: %s\n", strCpy);
-
-	split = str_split (strCpy, ',', &mynum);
-	if ( split == NULL ) {
-		// We didn't find the delimiter between the command and list of options
-		// which is obviously odd but lets accept it for now
-		return 0;
-	}
-	for ( i = 0; i < mynum; i++ ) {
-		// convert to integer and copy to our array
-		ports[i] = atoi((const char*)split[i]);
-		//	printf("%d\t", ports[i]);
-	}
-	//printf("\n");
-	free(split);
-	free(strCpy);
-	return mynum;
-}
-
-int parseIPs(char** ips, char *inbound) {
-	char* strCpy;
-        char** split; // array for the results
-	int mynum; // number of elements in the returned array
-        int i;
-
-                // remalloc strCpy to the size of split[1]
-		strCpy = malloc((strlen(inbound)+1) * sizeof( *strCpy));
-                // copy the contents (CSV list of ports) to a string
-		strcpy(strCpy, inbound);
-                split = str_split (strCpy, ',', &mynum);
-		if ( split == NULL ) {
-			// We didn't find the delimiter between the command and list of options
-			// which is obviously odd but lets accept it for now
-			return 0;
-		}                
-		for ( i = 0; i < mynum; i++ ) {
-			strcpy(ips[i], noquotes(strip(split[i])));
-		}
-        free(split);
-        free(strCpy);
-        return mynum;
-}
-
 void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist) {
 	void json_parse(json_object * jobj, struct CommandList *comlist); /*Forward Declaration*/
 	json_object *jarray = jobj; /*Simply get the array*/
@@ -147,9 +93,10 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 	char * options;
 	char * mask;
 	int incflag = 0;
-	int i;
+	int i = 0;
 	char * empty = "\0";
 	enum json_type type;
+	
 	json_object_object_foreach(jobj, key, val) { /*Passing through every array element*/
 		type = json_object_get_type(val);
 		if(strcmp(key, "command") == 0) {
@@ -195,28 +142,25 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 	// there are cases in which we may have a command with no options or where
 	// mask is not set. As such we want to put null strings in there
 	for (i = 0; i < comindex; i++) {
-	  if (comlist->options[i] == NULL) {
-	    printf("empty option\n");
-	    comlist->options[i] = malloc(1  * sizeof(char));
-	    strcpy(comlist->options[i], empty);
-	  }
-	  if (comlist->commands[i] == NULL) {
-	    printf("empty command\n");
-	    comlist->commands[i] = malloc(1  * sizeof(char));
-	    strcpy(comlist->commands[i], empty);
-	  }
+		if (comlist->options[i] == NULL) {
+			comlist->options[i] = malloc(1  * sizeof(char));
+			strcpy(comlist->options[i], empty);
+		}
+		if (comlist->commands[i] == NULL) {
+			comlist->commands[i] = malloc(1  * sizeof(char));
+			strcpy(comlist->commands[i], empty);
+		}
 	}
 	if (comlist->mask == NULL) {
-	  printf("empty mask\n");
-	  comlist->mask = malloc(1 *sizeof(char));
-	  strcpy(comlist->mask, empty);
+		comlist->mask = malloc(1 *sizeof(char));
+		strcpy(comlist->mask, empty);
 	}
 	comlist->maxindex = comindex; // how many array items do we have? 
 } 
 
 // take a string and see if there is CSV list of ports we 
 // export the resulting array for use elsewhere
-int parsePorts2 (struct FilterList *filterlist, char *inbound, int loc) {
+int parsePorts(struct FilterList *filterlist, char *inbound, int loc) {
 	char* strCpy;
 	char** split; // array for the results
 	int mynum; // number of elements in the returned array
@@ -225,7 +169,6 @@ int parsePorts2 (struct FilterList *filterlist, char *inbound, int loc) {
 	// create a copy of the string
 	strCpy = malloc( (strlen(inbound)+1) * sizeof( *strCpy ) );
 	strcpy( strCpy, inbound );
-//	printf("ParsePorts: %s\n", strCpy);
 
 	split = str_split (strCpy, ',', &mynum);
 	if ( split == NULL ) {
@@ -238,15 +181,13 @@ int parsePorts2 (struct FilterList *filterlist, char *inbound, int loc) {
 		// convert to integer and copy to our array
 		filterlist->ports[loc][i] = -1; // malloc(sizeof(*filterlist->ports[loc]));
 		filterlist->ports[loc][i] = atoi((const char*)split[i]);
-//		printf("[%d][%d]: %d\t", loc, i, filterlist->ports[loc][i]);
 	}
-//	printf("\n");
 	free(split);
 	free(strCpy);
 	return mynum;
 }
 
-int parseIPs2(struct FilterList *filterlist, char *inbound, int loc) {
+int parseIPs(struct FilterList *filterlist, char *inbound, int loc) {
 	char* strCpy;
         char** split; // array for the results
 	int mynum; // number of elements in the returned array
@@ -268,9 +209,6 @@ int parseIPs2(struct FilterList *filterlist, char *inbound, int loc) {
 		filterlist->strings[loc][i] = malloc((strlen(split[i])+1) * sizeof(char));
 		strcpy(filterlist->strings[loc][i], noquotes(strip(split[i])));
 	}
-//	for ( i = 0; i < mynum; i++ ) {
-//		printf("[%d][%d] %s", loc, i, filterlist->strings[loc][i]);
-//	}
 	free(split);
         free(strCpy);
         return mynum;
@@ -280,15 +218,12 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 	int max = (int)comlist->maxindex;
 	char *mask = comlist->mask;
 	int i;
-//	int j;
 	enum RequestTypes request;
 
 	filterlist->maxindex = max;
 	filterlist->mask = strdup(mask);
-//	printf ("Max is %d\n", max);
 	for (i = 0; i < max; i++) {
 		request = parse_string_to_enum(comlist->commands[i]);
-		//printf("request: %d\n", request);
 		filterlist->commands[i] = strdup(comlist->commands[i]);
 		if (request == -1) // couldn't map the command to the enum so ignore
 			continue;
@@ -296,14 +231,13 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 		case list:
 			break;
 		case exclude:
-			filterlist->arrindex[i] = parsePorts2(filterlist, comlist->options[i], i);
-			//printf ("we have %d elements\n", filterlist->arrindex[i]);
+			filterlist->arrindex[i] = parsePorts(filterlist, comlist->options[i], i);
 			break;
 		case include:
-			filterlist->arrindex[i] = parsePorts2(filterlist, comlist->options[i], i);
+			filterlist->arrindex[i] = parsePorts(filterlist, comlist->options[i], i);
 			break;
 		case filterip:
-			filterlist->arrindex[i] = parseIPs2(filterlist, comlist->options[i], i);
+			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
 			break;
 		case appexclude:
 			break;
@@ -315,26 +249,11 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 			break;
 		}
 	}
-	/* for (i = 0; i < max; i++) { */
-	/* 	printf("command in filterlist is %s\n", filterlist->commands[i]); */
-	/* 	printf("array length is %d\n", filterlist->arrindex[i]); */
-	/* 	printf("array elements: "); */
-	/* 	for (j = 0; j < filterlist->arrindex[i]; j++) { */
-	/* 		if (strcmp(filterlist->commands[i], "exclude") == 0) { */
-	/* 			if (filterlist->ports[i][j] != -1){  */
-	/* 				printf("about to crash\n"); */
-	/* 				printf("[%d][%d] %d\t", i, j, filterlist->ports[i][j]); */
-	/* 			} */
-	/* 		} */
-	/* 		if(strcmp(filterlist->commands[i], "filterip") == 0) { */
-	/* 			if (filterlist->strings[i][j] != NULL) */
-	/* 				printf("[%d][%d] %s\t", i, j, filterlist->strings[i][j]); */
-	/* 		} */
-	/* 	} */
-	/* 	printf("\n"); */
-	/* } */
 }
 
+/* take the incoming string and convert it to the corresponding 
+ * enum in the specified struct. 
+ */
 RequestTypes parse_string_to_enum( const char *s ) {
     static struct {
         const char *s;

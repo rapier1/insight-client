@@ -43,7 +43,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
         struct estats_error* err = NULL;
         struct estats_nl_client* cl = NULL;
         struct estats_connection_list* clist = NULL;
-        struct estats_connection* cp;
+        struct estats_connection* cp = NULL;
         struct estats_connection_tuple_ascii asc;
 	estats_val_data* tcpdata = NULL;
 	char time[20];
@@ -52,7 +52,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
         char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
         struct estats_mask mask; // mask struct
-        uint64_t tmpmask;
+        uint64_t tmpmask = NULL;
         const char delim = ',';
 	char *maskstring = filterlist->mask;
 	enum RequestTypes request;
@@ -252,7 +252,7 @@ Continue:
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
 	
-	//	printf("%s\n\n", *message);
+	//printf("%s\n\n", *message);
 	//printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
@@ -276,21 +276,13 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// store the data as a char
 	char *request = msg->payload;
         char *message;
-//	int ports[20] = {};
 	char **ips = NULL;
-//	int num = 0; 
 	int i, j = 0;
-//	int cid = 0;
-//	int filter = 0;
 	int free_flag = 0;
 	json_tokener *tok = json_tokener_new();
 	json_object *json_in = NULL;
-//	json_object *cmnd_obj = NULL;
-//	json_object *optn_obj = NULL;
-//	json_object *mask_obj = NULL;
 	enum json_tokener_error jerr;
-//	reportinfo *report_t;
-//	char *maskstring = '\0';
+	enum RequestTypes requests;
 	CommandList *comlist;
 	comindex = 0; // have top make sure to reste this for each message
 	FilterList *filterlist; // this contains the parsed commands
@@ -322,135 +314,84 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// we now have a validated inbound json object. 
 	// fill the comlist struct with our incoming request
 	comlist = malloc(sizeof(CommandList));
+	comlist->mask = NULL;
 	json_parse(json_in, comlist);
 	
-//	printf ("comindex is %d\n", comindex);
-//	for (i = 0 ; i < comindex; i++) {
-//	  printf ("command[%d] = %s:%s\n", i, comlist->commands[i], comlist->options[i]);
-//	}
-//	if (comlist->mask != NULL)
-//	  printf ("mask: %s\n", comlist->mask);
-
 	// filterlist is what we will be using to, ya know, filter the data. 
 	filterlist = malloc(sizeof(FilterList));
 	parse_comlist(comlist, filterlist);
 
 	// print out what we have for debug purposes
-	if (filterlist->mask != NULL)
-		printf ("mask: %s\n", filterlist->mask);
-	for (i = 0; i < filterlist->maxindex; i++) {
-		printf("command in filterlist is %s\n", filterlist->commands[i]);
-		printf("array length is %d\n", filterlist->arrindex[i]);
-		printf("array elements: ");
-		for (j = 0; j < filterlist->arrindex[i]; j++) {
-			if (strcmp(filterlist->commands[i], "exclude") == 0) {
-				if (filterlist->ports[i][j] != -1){
-					printf("[%d][%d] %d\t", i, j, filterlist->ports[i][j]);
-				}
-			}
-			if(strcmp(filterlist->commands[i], "filterip") == 0) {
-				if (filterlist->strings[i][j] != NULL)
-					printf("[%d][%d] %s\t", i, j, filterlist->strings[i][j]);
-			}
-		}
-		printf("\n");
-	}
+	/* if (filterlist->mask != NULL) */
+	/* 	printf ("mask: %s\n", filterlist->mask); */
+	/* for (i = 0; i < filterlist->maxindex; i++) { */
+	/* 	printf("command in filterlist is %s\n", filterlist->commands[i]); */
+	/* 	printf("array length is %d\n", filterlist->arrindex[i]); */
+	/* 	printf("array elements: "); */
+	/* 	for (j = 0; j < filterlist->arrindex[i]; j++) { */
+	/* 		if (strcmp(filterlist->commands[i], "exclude") == 0) { */
+	/* 			if (filterlist->ports[i][j] != -1){ */
+	/* 				printf("[%d][%d] %d\t", i, j, filterlist->ports[i][j]); */
+	/* 			} */
+	/* 		} */
+	/* 		if(strcmp(filterlist->commands[i], "filterip") == 0) { */
+	/* 			if (filterlist->strings[i][j] != NULL) */
+	/* 				printf("[%d][%d] %s\t", i, j, filterlist->strings[i][j]); */
+	/* 		} */
+	/* 	} */
+	/* 	printf("\n"); */
+	/* } */
 
 	// we now have a struct that contains all of the 
 	// various commands, arrays, and index values
-	
-
-	/* // use that object and pass a reference to it to the command  */
-	/* json_object_object_get_ex(json_in, "command", &cmnd_obj); */
-
-	/* // convert into a string so we can use it for the strpos later on */
-	/* char * command = (char *)json_object_get_string(cmnd_obj); */
-	/* printf("command is '%s'\n", command); */
-
-	/* // get any metric mask associated with it */
-	/* json_object_object_get_ex(json_in, "mask", &mask_obj); */
-	/* if (mask_obj != NULL) { */
-	/* 	maskstring = (char *)json_object_get_string(mask_obj); */
-	/* 	printf ("mask is %s\n", maskstring); */
-	/* } */
-
-	/* // list all data */
-	/* if (strcmp(command, "list") == 0) { */
-	/* } */
-	/* // exlude all connections matching the listed ports */
-	/* else if (strcmp(command, "exclude") == 0) { */
-	/* 	json_object_object_get_ex(json_in, "options", &optn_obj); */
-	/* 	char * excluded = (char *)json_object_get_string(optn_obj); */
-	/* 	printf("options are %s\n", excluded); */
-	/* 	// set to 1 to exclude the listed ports from the report */
-	/* 	filter = 1; */
-	/* 	// get the ports and number of items in array */
-	/* 	num = parsePorts(ports, excluded); */
-	/* } */
-	/* // include *only* the connections matching the listed ports */
-	/* else if (strcmp(command, "include") == 0) { */
-	/* 	json_object_object_get_ex(json_in, "options", &optn_obj); */
-	/* 	char * included = (char *)json_object_get_string(optn_obj); */
-	/* 	printf("options are %s\n", included); */
-	/* 	// set to 2 to only report on the listed ports */
-	/* 	filter = 2; */
-	/* 	num = parsePorts(ports, included); */
-	/* } */
-	/* else if (strcmp(command, "ipfilter") == 0) { */
-	/* 	// allocate space for the IPs */
-	/* 	free_flag = 1; */
-	/* 	ips = malloc(20 * sizeof *ips); */
-	/* 	for (i = 0; i < 20; i++) { */
-	/* 		ips[i] = malloc (20 * sizeof *ips[i]); */
-	/* 	} */
-	/* 	// get the json object */
-	/* 	json_object_object_get_ex(json_in, "options", &optn_obj); */
-	/* 	char * filtered = (char *)json_object_get_string(optn_obj); */
-	/* 	printf("options are %s\n", filtered); */
-	/* 	filter = 3; */
-	/* 	num = parseIPs(ips, filtered); */
-	/* } else if (strcmp(command, "report") == 0) { */
-	/* 	report_t = (reportinfo *)malloc(sizeof(reportinfo));  */
-	/* 	json_object_object_get_ex(json_in, "options", &optn_obj); */
-	/* 	// now we need to get the json object that is the noc/db access information */
-	/* 	// parse it out, get the latest stats for the cid, package them, and send them over */
-	/* 	// pass the object to json_parse_report */
-	/* 	report_parse(optn_obj, report_t); */
-	/* 	// dump the values to the log screen - remove for production */
-	/* 	report_dump(report_t); */
-	/* 	filter = 4; */
-	/* 	getConnData(&message, ports, num, filter, ips, report_t->cid, maskstring); */
-	/* 	// getConnData doesn't return a json object so we'll */
-	/* 	// need to convert the message back into a json object */
-	/* 	// at some point */
-	/* 	report_sql(report_t, message); */
-	/* 	libwebsock_send_text_with_length(state, message, strlen(message)); */
-	/* 	report_free(report_t); */
-	/* 	return NULL; */
-	/* } else { */
-	/* 	return NULL; */
-	/* } */
-	/* getConnData(&message, ports, num, filter, ips, cid, maskstring); */
-	/* printf("message length: %d\n",(int)strlen(message)); */
-	/* libwebsock_send_text_with_length(state, message, strlen(message)); */
 
 	getConnData(&message, filterlist); 
 	printf("message length: %d\n",(int)strlen(message)); 
 	libwebsock_send_text_with_length(state, message, strlen(message));
-
-
 	
-	for (i = 0; i < comindex; i++) {
+	for (i = 0; i < comlist->maxindex; i++) {
 	  free(comlist->commands[i]);
 	  free(comlist->options[i]);
 	}
 	free(comlist->mask);
 	free(comlist);
+	
+
+
+	// we have to go through this for each connection
+	for (i = 0; i < filterlist->maxindex; i++) {
+		requests = parse_string_to_enum(filterlist->commands[i]);
+		// what sort of data filtering will we be using
+		switch (requests) {
+		case exclude: 
+		case include:
+			free(filterlist->commands[i]);
+			free(filterlist->ports[i]);
+			break;
+		case filterip:
+		case appexclude:
+		case appinclude:
+			for (j = 0; j < filterlist->arrindex[i]; j++)
+				free(filterlist->strings[i][j]);
+			free(filterlist->strings[i]);
+			free(filterlist->commands[i]);
+			break;
+		case report:
+			break;
+		case list:
+			break;
+		default:
+			break;
+		}
+		
+	}
+	free(filterlist->mask);
+	free(filterlist);
 
 	// free the inbound jason object and token
 	json_object_put(json_in);
 	json_tokener_free(tok);
-//	free(message);
+	free(message);
 
 
 	// if we used ip filter we need to free the memory. 

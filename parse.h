@@ -46,8 +46,8 @@ typedef struct FilterList {
 int includePort (int, int, int [], int);
 int excludePort (int, int, int [], int);
 int filterIPs( char*, char*, char**, int);
-int parsePorts (int [], char *);
-int parseIPs(char** , char *);
+int parsePorts(struct FilterList *, char *, int);
+int parseIPs(struct FilterList *, char *, int);
 void json_parse_array (json_object *, char *, struct CommandList *);
 void json_parse (json_object *, struct CommandList *);
 void parse_comlist (struct CommandList *, struct FilterList *);
