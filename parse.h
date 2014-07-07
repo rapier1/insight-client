@@ -16,11 +16,32 @@
  */
 
 
+typedef enum RequestTypes {
+	list,
+	exclude,
+	include,
+	filterip,
+	appexclude,
+	appinclude,
+	report
+} RequestTypes;
+
 typedef struct CommandList {
 	char *commands[10];
 	char *options[10];
 	char *mask;
+	int maxindex;
 } CommandList;
+
+typedef struct FilterList {
+	char *commands[10]; //the command
+	char **strings[10]; // either app name or ips
+	int *ports[10]; // port array
+	int arrindex[10]; // number of elements in the strings or ports array
+	int maxindex;
+	int reportcid;
+	char *mask;
+} FilterList;
 
 int includePort (int, int, int [], int);
 int excludePort (int, int, int [], int);
@@ -29,3 +50,5 @@ int parsePorts (int [], char *);
 int parseIPs(char** , char *);
 void json_parse_array (json_object *, char *, struct CommandList *);
 void json_parse (json_object *, struct CommandList *);
+void parse_comlist (struct CommandList *, struct FilterList *);
+RequestTypes parse_string_to_enum( const char * );
