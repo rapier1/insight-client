@@ -27,19 +27,19 @@
 #include "string-funcs.h"
 #include <json-c/json.h>
 #include "parse.h"
+#include "debug.h"
 
+extern int debugflag;
 // if the dest port or source port exists in the array of ports
 // then return a 0. This sets the flag to zero and ensures that the
 // tcpdata is not skipped
 int includePort (int sport, int dport, int ports[], int index) {
 	int i;
 	for (i = 0; i < index; i++) {
-		if (sport == ports[i]) {
+		if (sport == ports[i])
 			return 0;
-		} 
-		if (dport == ports[i]) {
+		if (dport == ports[i]) 
 			return 0;
-		}
 	}
 	return 1;
 }
@@ -48,9 +48,8 @@ int includePort (int sport, int dport, int ports[], int index) {
 int excludePort (int sport, int dport, int ports[], int index) {
 	int i;
 	for (i = 0; i < index; i++) {
-		if (sport == ports[i] || dport == ports[i]) {
-			return ports[i];
-		}
+		if (sport == ports[i] || dport == ports[i])
+			return 1;
 	}
 	return 0;
 }
@@ -66,6 +65,31 @@ int filterIPs( char* local, char* remote, char** ips, int index) {
 	}
 	return 1;
 }
+
+// if the application name is found in the list of excluded apps
+// then return 1 indicating that we should not report this app
+int excludeApp (char* appname, char** apps, int index) {
+	int i;
+	for (i = 0; i < index; i++) {
+		if (strcmp(appname, apps[i]) == 0)
+			return 1;
+	}
+	return 0;
+}
+
+// if the application name is found in the list of included apps
+// then return 0 indicating that we should report on this app
+int includeApp (char* appname, char** apps, int index) {
+	int i;
+	for (i = 0; i < index; i++) {
+		if (strcmp(appname, apps[i]) == 0)
+			return 0;
+	}
+	return 1;
+}
+
+
+
 
 void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist) {
 	void json_parse(json_object * jobj, struct CommandList *comlist); /*Forward Declaration*/
@@ -201,9 +225,12 @@ int parseIPs(struct FilterList *filterlist, char *inbound, int loc) {
 		// which is obviously odd but lets accept it for now
 		return 0;
 	}
+	log_debug("ParseIP split value: %d", mynum);
 	for ( i = 0; i < mynum; i++ ) {
+		log_debug("Split[%d]: %s for loc %d", i, split[i], loc);
 		filterlist->strings[loc][i] = malloc((strlen(split[i])+1) * sizeof(char));
 		strcpy(filterlist->strings[loc][i], noquotes(strip(split[i])));
+		log_debug("filterlist-strings[%d][%d]: %s",loc, i, filterlist->strings[loc][i]);
 	}
 	free(split);
         free(strCpy);
@@ -236,8 +263,10 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
 			break;
 		case appexclude:
+			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
 			break;
 		case appinclude:
+			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
 			break;
 		case report:
 			break;

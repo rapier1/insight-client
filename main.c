@@ -97,13 +97,17 @@ void getConnData (char **message, struct FilterList *filterlist) {
         struct estats_nl_client* cl = NULL;
         struct estats_connection_list* clist = NULL;
         struct estats_connection* cp = NULL;
-        struct estats_connection_tuple_ascii asc;
+        struct estats_connection_info* ci;
+	struct estats_connection_tuple_ascii asc;
 	estats_val_data* tcpdata = NULL;
 	char time[20];
-	int sport, dport, i, flag, maxconn, shownconn = 0;
+	int sport, dport, i, flag, shownconn = 0;
         struct estats_mask mask; // mask struct
 	char *maskstring = filterlist->mask;
 	enum RequestTypes request;
+	char *appname;
+	int appname_flag = 0;
+	int maxconn = 0;
 
 	// compute the mask based on the maskstring
 	getMetricMask(&mask, maskstring);
@@ -113,7 +117,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
         Chk(estats_connection_list_new(&clist));
 	Chk(estats_nl_client_set_mask(cl, &mask));
         Chk(estats_list_conns(clist, cl));
-	//	Chk(estats_connection_list_add_info(clist));
+	Chk(estats_connection_list_add_info(clist));
 
 	// create the tcpdata struct
 	Chk(estats_val_data_new(&tcpdata));
@@ -127,14 +131,20 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		maxconn++; // total number of connections processed including skipped connections
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
-		//struct estats_connection_info* ci = (struct estats_connection_info*) cl;
-	
-		//printf("cmd: %s\n", ci->cmdline);
+
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
                 Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
-	      
+
+		// honestly this seems like the worst way to get the command line for the connection
+		// ever.
+		list_for_each(&clist->connection_info_head, ci, list) {
+			if (atoi(asc.cid) == ci->cid) {
+				appname_flag = 1;
+				appname = strdup(ci->cmdline);
+			}
+		}
 
 		// we have to go through this for each connection
 		for (i = 0; i < filterlist->maxindex; i++) {
@@ -144,13 +154,15 @@ void getConnData (char **message, struct FilterList *filterlist) {
 			case exclude: 
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
-				flag = excludePort(sport, dport, filterlist->ports[i], filterlist->arrindex[i]);
+				flag = excludePort(sport, dport, filterlist->ports[i], 
+						   filterlist->arrindex[i]);
 				break;
 			case include:
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				// return 0 *if* the dport or sport is in our list of included ports
-				flag = includePort(sport, dport, filterlist->ports[i], filterlist->arrindex[i]);
+				flag = includePort(sport, dport, filterlist->ports[i], 
+						   filterlist->arrindex[i]);
 				break;
 			case filterip:
 				flag = filterIPs(asc.local_addr, asc.rem_addr, 
@@ -159,6 +171,14 @@ void getConnData (char **message, struct FilterList *filterlist) {
 			case report:
 				if (filterlist->reportcid != atoi(asc.cid)) 
 					flag = 1;
+				break;
+			case appinclude:
+				flag = includeApp(appname, filterlist->strings[i], 
+						  filterlist->arrindex[i]);
+				break;
+			case appexclude:
+				flag = excludeApp(appname, filterlist->strings[i], 
+						  filterlist->arrindex[i]);
 				break;
 			case list:
 				break;
@@ -170,6 +190,10 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		
 		// if any of the commands creates a flag we skip it. 
 		if (flag) {
+			if (appname_flag) {
+				free(appname);
+				appname_flag = 0;
+			}
 			flag = 0;
 			continue;
 		}
@@ -186,12 +210,20 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		json_object *jsrcport = json_object_new_string(asc.local_port);
 		json_object *jdestip = json_object_new_string(asc.rem_addr);
 		json_object *jdestport = json_object_new_string(asc.rem_port);
+		json_object *jappname = json_object_new_string(appname);
 		
 		// append the tuple data to the tuple data container
 		json_object_object_add (tuple_data, "SrcIP", jsrcip);
 		json_object_object_add (tuple_data, "SrcPort", jsrcport);
 		json_object_object_add (tuple_data, "DestIP", jdestip);
 		json_object_object_add (tuple_data, "DestPort", jdestport);
+		json_object_object_add (tuple_data, "Application", jappname);
+
+		//don't forget to free the appname
+		if (appname_flag) {
+			free(appname);
+			appname_flag = 0;
+		}
 		
 		// append the tupple data container to the connection data container
 		json_object_object_add (connection_data, "tuple", tuple_data);
@@ -258,8 +290,8 @@ Continue:
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
 	
-	log_info("%s\n\n", *message);
-	//printf("Processed %d of %d connections\n", shownconn, maxconn);
+	log_info("%s\n", *message);
+	log_debug("Processed %d of %d connections", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
 
@@ -323,6 +355,14 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	comlist->maxindex = 0;
 	json_parse(json_in, comlist);
 	
+	if (debugflag) {
+		for (i = 0; i < comlist->maxindex; i++) {
+			log_debug("[%d]command: %s", i, comlist->commands[i]);
+			log_debug("[%d]options: %s", i, comlist->options[i]);
+		}
+		log_debug("mask: %s", comlist->mask);
+	}
+
 	// filterlist is what we will be using to, ya know, filter the data. 
 	filterlist = malloc(sizeof(FilterList));
 	parse_comlist(comlist, filterlist);
@@ -334,23 +374,32 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 			log_debug("mask: %s", filterlist->mask);
 		log_debug("MaxIndex: %d", filterlist->maxindex);
 		for (i = 0; i < filterlist->maxindex; i++) {
-			log_debug("command in filterlist is %s", filterlist->commands[i]);
-			log_debug("array length is %d", filterlist->arrindex[i]);
-			log_debug("array elements: ");
+			log_debug("[%d]command in filterlist is %s", i, filterlist->commands[i]);
+			log_debug("[%d]array length is %d", i, filterlist->arrindex[i]);
+			log_debug("[%d]array elements: ", i);
 			for (j = 0; j < filterlist->arrindex[i]; j++) {
 				if (strcmp(filterlist->commands[i], "exclude") == 0) {
 					if (filterlist->ports[i][j] != -1){
-						log_debug("[%d][%d] %d", i, j, filterlist->ports[i][j]);
+						log_debug("\t[%d][%d] %d", i, j, filterlist->ports[i][j]);
 					}
 				}
 				if (strcmp(filterlist->commands[i], "include") == 0) {
 					if (filterlist->ports[i][j] != -1){
-						log_debug("[%d][%d] %d", i, j, filterlist->ports[i][j]);
+						log_debug("\t[%d][%d] %d", i, j, filterlist->ports[i][j]);
 					}
 				}
 				if(strcmp(filterlist->commands[i], "filterip") == 0) {
 					if (filterlist->strings[i][j] != NULL)
-						log_debug("[%d][%d] %s", i, j, filterlist->strings[i][j]);
+						log_debug("\t[%d][%d] %s", i, j, filterlist->strings[i][j]);
+				}
+				if(strcmp(filterlist->commands[i], "appexclude") == 0) {
+					if (filterlist->strings[i][j] != NULL)
+						log_debug("\t[%d][%d] %s", i, j, filterlist->strings[i][j]);
+				}
+
+				if(strcmp(filterlist->commands[i], "appinclude") == 0) {
+					if (filterlist->strings[i][j] != NULL)
+						log_debug("\t[%d][%d] %s", i, j, filterlist->strings[i][j]);
 				}
 			}
 		}
@@ -359,7 +408,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// various commands, arrays, and index values
 
 	getConnData(&message, filterlist); 
-	log_debug("message length: %d\n",(int)strlen(message)); 
+	log_debug("message length: %d",(int)strlen(message)); 
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
 	for (i = 0; i < comlist->maxindex; i++) {

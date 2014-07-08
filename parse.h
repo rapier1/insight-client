@@ -45,6 +45,8 @@ typedef struct FilterList {
 
 int includePort (int, int, int [], int);
 int excludePort (int, int, int [], int);
+int excludeApp (char*, char**, int);
+int includeApp (char*, char**, int);
 int filterIPs( char*, char*, char**, int);
 int parsePorts(struct FilterList *, char *, int);
 int parseIPs(struct FilterList *, char *, int);
