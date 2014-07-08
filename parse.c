@@ -28,8 +28,6 @@
 #include <json-c/json.h>
 #include "parse.h"
 
-int comindex = 0;
-
 // if the dest port or source port exists in the array of ports
 // then return a 0. This sets the flag to zero and ensures that the
 // tcpdata is not skipped
@@ -86,7 +84,6 @@ void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist
 	}
 }
 
-
 /*Parsing the json object*/
 void json_parse(json_object * jobj, struct CommandList *comlist) {
 	char * command;
@@ -101,16 +98,16 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 		type = json_object_get_type(val);
 		if(strcmp(key, "command") == 0) {
 			command = (char *)json_object_get_string(val);
-			comlist->commands[comindex] = malloc((strlen(command)+1) * sizeof(char));
-			strcpy(comlist->commands[comindex], command);
+			comlist->commands[comlist->maxindex] = malloc((strlen(command)+1) * sizeof(char));
+			strcpy(comlist->commands[comlist->maxindex], command);
 			//we need in increment i but only when we see a command
 			//and an option so if incflag = 2 then we increment i
 			incflag++;
 		}
 		if(strcmp(key, "options") == 0) {
 			options = (char *)json_object_get_string(val);
-			comlist->options[comindex] = malloc((strlen(options)+1) * sizeof(char));
-			strcpy(comlist->options[comindex], options);
+			comlist->options[comlist->maxindex] = malloc((strlen(options)+1) * sizeof(char));
+			strcpy(comlist->options[comlist->maxindex], options);
 			incflag++;
 		}
 		if(strcmp(key, "mask") == 0) {
@@ -120,7 +117,7 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 		}
 		if (incflag == 2) {
 			incflag = 0;
-			comindex++;
+			comlist->maxindex++; //track the total number of commands we are dealing with
 		}
 		switch (type) {
 		case json_type_null:
@@ -141,7 +138,7 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 	// we need to make sure every element of comlist is properly initialized
 	// there are cases in which we may have a command with no options or where
 	// mask is not set. As such we want to put null strings in there
-	for (i = 0; i < comindex; i++) {
+	for (i = 0; i < comlist->maxindex; i++) {
 		if (comlist->options[i] == NULL) {
 			comlist->options[i] = malloc(1  * sizeof(char));
 			strcpy(comlist->options[i], empty);
@@ -155,7 +152,6 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 		comlist->mask = malloc(1 *sizeof(char));
 		strcpy(comlist->mask, empty);
 	}
-	comlist->maxindex = comindex; // how many array items do we have? 
 } 
 
 // take a string and see if there is CSV list of ports we 

@@ -32,34 +32,22 @@
 #include "parse.h"
 #include "report.h"
 #include "geoip.h"
+#include "version.h"
+#include "debug.h"
+
+int debugflag = 0;
+int printjson = 0;
 
 MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
 
-extern int comindex;
-
-// taken from web10g logger and expanded upon in order to build a JSON data structure
-//void getConnData (char **message, int skips[], int num, int filter, char** ips, int rcid, char *maskstring) {
-void getConnData (char **message, struct FilterList *filterlist) {
-        struct estats_error* err = NULL;
-        struct estats_nl_client* cl = NULL;
-        struct estats_connection_list* clist = NULL;
-        struct estats_connection* cp = NULL;
-        struct estats_connection_tuple_ascii asc;
-	estats_val_data* tcpdata = NULL;
-	char time[20];
-	int sport, dport, i, flag, maxconn, shownconn = 0;
+void getMetricMask (struct estats_mask *mask, char *maskstring) {
 	const char *defaultmask = "25124,12,410000,90,0"; //if not mask passed by client UI use this
         char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
-        struct estats_mask mask; // mask struct
         uint64_t tmpmask = NULL;
         const char delim = ',';
-	char *maskstring = filterlist->mask;
-	enum RequestTypes request;
+	int i = 0;
 
-	// all of the mask stuff should be moved into a separate function
-
-	// if no mask is passed then we set the mask to the default
 	if (maskstring != NULL) {
 		int masklength = strlen(maskstring);
 		// if the length of the mask is 0 then treat that as no passed mask
@@ -77,14 +65,14 @@ void getConnData (char **message, struct FilterList *filterlist) {
 	cp_strmask = strmask;
 	
 	// initialize the mask struct
-        mask.masks[0] = DEFAULT_PERF_MASK;
-        mask.masks[1] = DEFAULT_PATH_MASK;
-        mask.masks[2] = DEFAULT_STACK_MASK;
-        mask.masks[3] = DEFAULT_APP_MASK;
-        mask.masks[4] = DEFAULT_TUNE_MASK;
+        mask->masks[0] = DEFAULT_PERF_MASK;
+        mask->masks[1] = DEFAULT_PATH_MASK;
+        mask->masks[2] = DEFAULT_STACK_MASK;
+        mask->masks[3] = DEFAULT_APP_MASK;
+        mask->masks[4] = DEFAULT_TUNE_MASK;
 
         for (i = 0; i < MAX_TABLE; i++) {
-                mask.if_mask[i] = 0;
+                mask->if_mask[i] = 0;
         }
 
 	// convert the mask string into the mask struct
@@ -95,12 +83,30 @@ void getConnData (char **message, struct FilterList *filterlist) {
 			char *str;
 			str = (str = strchr(strtmp, 'x')) ? str+1 : strtmp;
 			if (sscanf(str, "%"PRIx64, &tmpmask) == 1) {
-				mask.masks[i] = tmpmask & mask.masks[i];
-				mask.if_mask[i] = 1;
+				mask->masks[i] = tmpmask & mask->masks[i];
+				mask->if_mask[i] = 1;
 			}
 		}
 	}
 	free(cp_strmask); // actually frees strmask
+}
+
+// taken from web10g logger and expanded upon in order to build a JSON data structure
+void getConnData (char **message, struct FilterList *filterlist) {
+        struct estats_error* err = NULL;
+        struct estats_nl_client* cl = NULL;
+        struct estats_connection_list* clist = NULL;
+        struct estats_connection* cp = NULL;
+        struct estats_connection_tuple_ascii asc;
+	estats_val_data* tcpdata = NULL;
+	char time[20];
+	int sport, dport, i, flag, maxconn, shownconn = 0;
+        struct estats_mask mask; // mask struct
+	char *maskstring = filterlist->mask;
+	enum RequestTypes request;
+
+	// compute the mask based on the maskstring
+	getMetricMask(&mask, maskstring);
 
 	// get a list of the connections available
         Chk(estats_nl_client_init(&cl));
@@ -252,7 +258,7 @@ Continue:
 	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string(jsonout));
 	
-	//printf("%s\n\n", *message);
+	log_info("%s\n\n", *message);
 	//printf("Processed %d of %d connections\n", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
@@ -284,7 +290,6 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	enum json_tokener_error jerr;
 	enum RequestTypes requests;
 	CommandList *comlist;
-	comindex = 0; // have top make sure to reste this for each message
 	FilterList *filterlist; // this contains the parsed commands
 
 	// grab the incoming json string
@@ -315,6 +320,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// fill the comlist struct with our incoming request
 	comlist = malloc(sizeof(CommandList));
 	comlist->mask = NULL;
+	comlist->maxindex = 0;
 	json_parse(json_in, comlist);
 	
 	// filterlist is what we will be using to, ya know, filter the data. 
@@ -322,31 +328,38 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	parse_comlist(comlist, filterlist);
 
 	// print out what we have for debug purposes
-	/* if (filterlist->mask != NULL) */
-	/* 	printf ("mask: %s\n", filterlist->mask); */
-	/* for (i = 0; i < filterlist->maxindex; i++) { */
-	/* 	printf("command in filterlist is %s\n", filterlist->commands[i]); */
-	/* 	printf("array length is %d\n", filterlist->arrindex[i]); */
-	/* 	printf("array elements: "); */
-	/* 	for (j = 0; j < filterlist->arrindex[i]; j++) { */
-	/* 		if (strcmp(filterlist->commands[i], "exclude") == 0) { */
-	/* 			if (filterlist->ports[i][j] != -1){ */
-	/* 				printf("[%d][%d] %d\t", i, j, filterlist->ports[i][j]); */
-	/* 			} */
-	/* 		} */
-	/* 		if(strcmp(filterlist->commands[i], "filterip") == 0) { */
-	/* 			if (filterlist->strings[i][j] != NULL) */
-	/* 				printf("[%d][%d] %s\t", i, j, filterlist->strings[i][j]); */
-	/* 		} */
-	/* 	} */
-	/* 	printf("\n"); */
-	/* } */
-
+	if (debugflag) {
+		log_debug ("INBOUND COMMANDS");
+		if (filterlist->mask != NULL)
+			log_debug("mask: %s", filterlist->mask);
+		log_debug("MaxIndex: %d", filterlist->maxindex);
+		for (i = 0; i < filterlist->maxindex; i++) {
+			log_debug("command in filterlist is %s", filterlist->commands[i]);
+			log_debug("array length is %d", filterlist->arrindex[i]);
+			log_debug("array elements: ");
+			for (j = 0; j < filterlist->arrindex[i]; j++) {
+				if (strcmp(filterlist->commands[i], "exclude") == 0) {
+					if (filterlist->ports[i][j] != -1){
+						log_debug("[%d][%d] %d", i, j, filterlist->ports[i][j]);
+					}
+				}
+				if (strcmp(filterlist->commands[i], "include") == 0) {
+					if (filterlist->ports[i][j] != -1){
+						log_debug("[%d][%d] %d", i, j, filterlist->ports[i][j]);
+					}
+				}
+				if(strcmp(filterlist->commands[i], "filterip") == 0) {
+					if (filterlist->strings[i][j] != NULL)
+						log_debug("[%d][%d] %s", i, j, filterlist->strings[i][j]);
+				}
+			}
+		}
+	}
 	// we now have a struct that contains all of the 
 	// various commands, arrays, and index values
 
 	getConnData(&message, filterlist); 
-	printf("message length: %d\n",(int)strlen(message)); 
+	log_debug("message length: %d\n",(int)strlen(message)); 
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
 	for (i = 0; i < comlist->maxindex; i++) {
@@ -405,6 +418,14 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	return NULL;
 }
 
+void usage(void) {
+	printf ("Insight Web10G client. Version: %3.2f\n", VERSION);
+	printf ("\t-h this help screen\n");
+	printf ("\t-p listen port\n");
+	printf ("\t-g path to geoip database\n");
+	printf ("\t-d print debug statements to stdout\n");
+	printf ("\t-j print outbound json string to stdout\n");
+}
 
 int
 onmessage(libwebsock_client_state *state, libwebsock_message *msg)
@@ -438,9 +459,36 @@ onclose(libwebsock_client_state *state)
 int main(int argc, char *argv[])
 {
 	libwebsock_context *ctx = NULL;
-	char* port;
+	char* port = "9000";
+	char* geoippath = "/home/rapier/websockets/test/GeoLite2-City.mmdb";
+	int opt;
 
-	int status = MMDB_open("/home/rapier/websockets/test/GeoLite2-City.mmdb", MMDB_MODE_MMAP, &mmdb);
+        while ((opt = getopt(argc, argv, "hp:g:dj")) != -1) {
+                switch (opt) {
+                case 'h':
+                        usage();
+                        exit(EXIT_SUCCESS);
+                        break;
+                case 'p':
+			port = optarg;
+                        break;
+                case 'g':
+                        geoippath = optarg;
+                        break;
+		case 'd':
+			debugflag = 1;
+			break;
+		case 'j':
+			printjson = 1;
+			break;
+                default:
+			usage();
+                        exit(EXIT_FAILURE);
+                        break;
+                }
+        }
+
+	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &mmdb);
 	if (MMDB_SUCCESS != status) {
 	  printf("Can't open db\n");
 	  return 0;
@@ -448,18 +496,12 @@ int main(int argc, char *argv[])
 
 	printf ("geoIP database opened and ready\n");
 
-	if (argc != 2) {
-		port = "9000";
-	} else {
-		port = argv[1];
-	}
-	
 	ctx = libwebsock_init();
 	if (ctx == NULL ) {
 		fprintf(stderr, "Error during libwebsock_init.\n");
 		exit(1);
 	}
-	libwebsock_bind(ctx, "0.0.0.0", port);
+	libwebsock_bind(ctx, "127.0.0.1", port);
 	fprintf(stderr, "libwebsock listening on port %s\n", port);
 	ctx->onmessage = onmessage;
 	ctx->onopen = onopen;

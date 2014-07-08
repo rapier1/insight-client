@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS= -g -c -Wall 
 LDFLAGS= -lestats -ljson-c -lwebsock -lmaxminddb
-SOURCES= main.c parse.c report.c string-funcs.c geoip.c
+SOURCES= main.c parse.c report.c string-funcs.c geoip.c debug.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE = insight
 
