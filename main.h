@@ -20,8 +20,9 @@
 #include "parse.h"
 
 void get_metric_mask (struct estats_mask *, char *);
-void add_cmdline(int, char *);
-void get_cmdline_from_cid(char ** , int);
+void add_cmdline_to_hash(int, char *);
+void get_cmdline_from_cid_hash(char ** , int);
+void delete_all_from_hash();
 void get_connection_data (char **, struct FilterList *);
 void *analyze_inbound(libwebsock_client_state *, libwebsock_message *);
 int onmessage(libwebsock_client_state *, libwebsock_message *);

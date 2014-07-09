@@ -65,6 +65,7 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	}
 	
 	// we need to maintain a copy of the pointer of strmask so we can free it
+	// as the ponter is shifted by strsep
 	cp_strmask = strmask;
 	
 	// initialize the mask struct
@@ -94,7 +95,7 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	free(cp_strmask); // actually frees strmask
 }
 
-void add_cmdline(int cid, char *cmdline) {
+void add_cmdline_to_hash(int cid, char *cmdline) {
     struct CmdLineCID *s;
 
     HASH_FIND_INT(cmdlines, &cid, s);
@@ -107,7 +108,7 @@ void add_cmdline(int cid, char *cmdline) {
     return;
 }
 
-void get_cmdline_from_cid(char** appname, int cid) {
+void get_cmdline_from_cid_hash(char** appname, int cid) {
 	struct CmdLineCID *s;
 	HASH_FIND_INT(cmdlines, &cid, s);
 	if (s != NULL) {
@@ -116,6 +117,15 @@ void get_cmdline_from_cid(char** appname, int cid) {
 		*appname = strdup("\0");
 	}
 	return;
+}
+
+void delete_all_from_hash() {
+  struct CmdLineCID *current_cmd, *tmp;
+
+  HASH_ITER(hh, cmdlines, current_cmd, tmp) {
+    HASH_DEL(cmdlines, current_cmd);  /* delete it (cmdlines advances to next) */
+    free(current_cmd);            /* free it */
+  }
 }
 
 // taken from web10g logger and expanded upon in order to build a JSON data structure
@@ -154,7 +164,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 
 	// build a hash of the cmdlines and cids
 	list_for_each(&clist->connection_info_head, ci, list) {
-		add_cmdline(ci->cid, ci->cmdline);
+		add_cmdline_to_hash(ci->cid, ci->cmdline);
 	}
 	
 	// step through the list of clients
@@ -163,12 +173,12 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
 
-		get_cmdline_from_cid(&appname, atoi(asc.cid));
-
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
                 Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
+
+		get_cmdline_from_cid_hash(&appname, atoi(asc.cid));
 
 		// we have to go through this for each connection
 		// as a note. this is a dumb function (it just a big OR) 
@@ -242,7 +252,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		json_object_object_add (tuple_data, "DestIP", jdestip);
 		json_object_object_add (tuple_data, "DestPort", jdestport);
 		json_object_object_add (tuple_data, "Application", jappname);
-		free(appname);
+		free(appname); // no longer need the name of the application
 
 		// append the tupple data container to the connection data container
 		json_object_object_add (connection_data, "tuple", tuple_data);
@@ -318,6 +328,8 @@ Cleanup:
         estats_connection_list_free(&clist);
 	estats_val_data_free(&tcpdata);
         estats_nl_client_destroy(&cl);
+
+	delete_all_from_hash(); // free the command line hash
 
         if (err != NULL) {
 		PRINT_AND_FREE(err);
@@ -442,11 +454,11 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// we have to go through this for each connection
 	for (i = 0; i < filterlist->maxindex; i++) {
 		requests = parse_string_to_enum(filterlist->commands[i]);
+		free(filterlist->commands[i]);
 		// what sort of data filtering will we be using
 		switch (requests) {
 		case exclude: 
 		case include:
-			free(filterlist->commands[i]);
 			free(filterlist->ports[i]);
 			break;
 		case filterip:
@@ -455,7 +467,6 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 			for (j = 0; j < filterlist->arrindex[i]; j++)
 				free(filterlist->strings[i][j]);
 			free(filterlist->strings[i]);
-			free(filterlist->commands[i]);
 			break;
 		case report:
 			break;
@@ -464,7 +475,6 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		default:
 			break;
 		}
-		
 	}
 	free(filterlist->mask);
 	free(filterlist);
