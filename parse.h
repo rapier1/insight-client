@@ -15,6 +15,8 @@
  *
  */
 
+#ifndef PARSE_H
+#define PARSE_H
 
 typedef enum RequestTypes {
 	list,
@@ -43,14 +45,16 @@ typedef struct FilterList {
 	char *mask;
 } FilterList;
 
-int includePort (int, int, int [], int);
-int excludePort (int, int, int [], int);
-int excludeApp (char*, char**, int);
-int includeApp (char*, char**, int);
-int filterIPs( char*, char*, char**, int);
-int parsePorts(struct FilterList *, char *, int);
-int parseIPs(struct FilterList *, char *, int);
-void json_parse_array (json_object *, char *, struct CommandList *);
-void json_parse (json_object *, struct CommandList *);
+int include_port (int, int, int [], int);
+int exclude_port (int, int, int [], int);
+int exclude_app (char*, char**, int);
+int include_app (char*, char**, int);
+int filter_ips( char*, char*, char**, int);
+int parse_ints(struct FilterList *, char *, int);
+int parse_strings(struct FilterList *, char *, int);
+void parse_json_array (json_object *, char *, struct CommandList *);
+void parse_json (json_object *, struct CommandList *);
 void parse_comlist (struct CommandList *, struct FilterList *);
 RequestTypes parse_string_to_enum( const char * );
+
+#endif

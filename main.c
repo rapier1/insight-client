@@ -43,7 +43,7 @@ MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can re
 
 struct CmdLineCID *cmdlines = NULL;
 
-void getMetricMask (struct estats_mask *mask, char *maskstring) {
+void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	const char *defaultmask = "25124,12,410000,90,0"; //if not mask passed by client UI use this
         char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
@@ -119,7 +119,7 @@ void get_cmdline_from_cid(char** appname, int cid) {
 }
 
 // taken from web10g logger and expanded upon in order to build a JSON data structure
-void getConnData (char **message, struct FilterList *filterlist) {
+void get_connection_data (char **message, struct FilterList *filterlist) {
         struct estats_error* err = NULL;
         struct estats_nl_client* cl = NULL;
         struct estats_connection_list* clist = NULL;
@@ -136,7 +136,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
 	int maxconn = 0;
 
 	// compute the mask based on the maskstring
-	getMetricMask(&mask, maskstring);
+	get_metric_mask(&mask, maskstring);
 
 	// get a list of the connections available
         Chk(estats_nl_client_init(&cl));
@@ -171,6 +171,9 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
 
 		// we have to go through this for each connection
+		// as a note. this is a dumb function (it just a big OR) 
+		// so conflicting commands will result in no data or all the data
+		// it's up to the user and/or ui to make smart choices.
 		for (i = 0; i < filterlist->maxindex; i++) {
 			request = parse_string_to_enum(filterlist->commands[i]);
 			// what sort of data filtering will we be using
@@ -178,18 +181,18 @@ void getConnData (char **message, struct FilterList *filterlist) {
 			case exclude: 
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
-				flag = excludePort(sport, dport, filterlist->ports[i], 
+				flag = exclude_port(sport, dport, filterlist->ports[i], 
 						   filterlist->arrindex[i]);
 				break;
 			case include:
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				// return 0 *if* the dport or sport is in our list of included ports
-				flag = includePort(sport, dport, filterlist->ports[i], 
+				flag = include_port(sport, dport, filterlist->ports[i], 
 						   filterlist->arrindex[i]);
 				break;
 			case filterip:
-				flag = filterIPs(asc.local_addr, asc.rem_addr, 
+				flag = filter_ips(asc.local_addr, asc.rem_addr, 
 						 filterlist->strings[i], filterlist->arrindex[i]);
 				break;
 			case report:
@@ -197,11 +200,11 @@ void getConnData (char **message, struct FilterList *filterlist) {
 					flag = 1;
 				break;
 			case appinclude:
-				flag = includeApp(appname, filterlist->strings[i], 
+				flag = include_app(appname, filterlist->strings[i], 
 						  filterlist->arrindex[i]);
 				break;
 			case appexclude:
-				flag = excludeApp(appname, filterlist->strings[i], 
+				flag = exclude_app(appname, filterlist->strings[i], 
 						  filterlist->arrindex[i]);
 				break;
 			case list:
@@ -325,7 +328,7 @@ Cleanup:
 }
 
 // figure out what we are doing with the incoming requests
-void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)  
+void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)  
 {
 	// store the data as a char
 	char *request = msg->payload;
@@ -369,7 +372,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	comlist = malloc(sizeof(CommandList));
 	comlist->mask = NULL;
 	comlist->maxindex = 0;
-	json_parse(json_in, comlist);
+	parse_json(json_in, comlist);
 	
 	if (debugflag) {
 		for (i = 0; i < comlist->maxindex; i++) {
@@ -423,7 +426,7 @@ void *analyzeInbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// we now have a struct that contains all of the 
 	// various commands, arrays, and index values
 
-	getConnData(&message, filterlist); 
+	get_connection_data(&message, filterlist); 
 	log_debug("message length: %d",(int)strlen(message)); 
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
@@ -497,7 +500,7 @@ onmessage(libwebsock_client_state *state, libwebsock_message *msg)
 {
 	switch (msg->opcode) {
 	case WS_OPCODE_TEXT:{
-		analyzeInbound(state, msg);
+		analyze_inbound(state, msg);
 		break;
 	}
 	default:

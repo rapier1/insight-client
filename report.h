@@ -15,6 +15,9 @@
  *
  */
 
+#ifndef REPORT_H
+#define REPORT_H
+
 #include "json-c/json.h"
 
 typedef struct reportinfo {
@@ -34,3 +37,5 @@ void report_parse (json_object *, reportinfo *);
 void report_dump (reportinfo *);
 void report_free (reportinfo *);
 int report_sql (reportinfo *, char *);
+
+#endif

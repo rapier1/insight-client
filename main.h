@@ -17,10 +17,13 @@
 
 #include <websock/websock.h> // websocket lib
 #include "uthash.h"
+#include "parse.h"
 
-//void getConnData (char **, int [], int, int, char**, int, char *);
-//void getConnData (char **, struct FilterList *);
-void *analyzeInbound(libwebsock_client_state *, libwebsock_message *);
+void get_metric_mask (struct estats_mask *, char *);
+void add_cmdline(int, char *);
+void get_cmdline_from_cid(char ** , int);
+void get_connection_data (char **, struct FilterList *);
+void *analyze_inbound(libwebsock_client_state *, libwebsock_message *);
 int onmessage(libwebsock_client_state *, libwebsock_message *);
 int onopen(libwebsock_client_state *);
 int onclose(libwebsock_client_state *);

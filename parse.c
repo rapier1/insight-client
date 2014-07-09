@@ -33,7 +33,7 @@ extern int debugflag;
 // if the dest port or source port exists in the array of ports
 // then return a 0. This sets the flag to zero and ensures that the
 // tcpdata is not skipped
-int includePort (int sport, int dport, int ports[], int index) {
+int include_port (int sport, int dport, int ports[], int index) {
 	int i;
 	for (i = 0; i < index; i++) {
 		if (sport == ports[i])
@@ -45,7 +45,7 @@ int includePort (int sport, int dport, int ports[], int index) {
 }
 
 // Same as above but if the tuples port is in the list then skip it. 
-int excludePort (int sport, int dport, int ports[], int index) {
+int exclude_port (int sport, int dport, int ports[], int index) {
 	int i;
 	for (i = 0; i < index; i++) {
 		if (sport == ports[i] || dport == ports[i])
@@ -56,7 +56,7 @@ int excludePort (int sport, int dport, int ports[], int index) {
 
 // only report on IPs passed to us. This does a string comparison
 // we can later expand this to do filtering on CIDR blocks and the like. 
-int filterIPs( char* local, char* remote, char** ips, int index) {
+int filter_ips( char* local, char* remote, char** ips, int index) {
 	int i;
 	for (i = 0; i < index; i++) {
 		if (strcmp(local, ips[i]) == 0 ||
@@ -68,7 +68,7 @@ int filterIPs( char* local, char* remote, char** ips, int index) {
 
 // if the application name is found in the list of excluded apps
 // then return 1 indicating that we should not report this app
-int excludeApp (char* appname, char** apps, int index) {
+int exclude_app (char* appname, char** apps, int index) {
 	int i;
 	for (i = 0; i < index; i++) {
 		if (strcmp(appname, apps[i]) == 0)
@@ -79,7 +79,7 @@ int excludeApp (char* appname, char** apps, int index) {
 
 // if the application name is found in the list of included apps
 // then return 0 indicating that we should report on this app
-int includeApp (char* appname, char** apps, int index) {
+int include_app (char* appname, char** apps, int index) {
 	int i;
 	for (i = 0; i < index; i++) {
 		if (strcmp(appname, apps[i]) == 0)
@@ -91,8 +91,8 @@ int includeApp (char* appname, char** apps, int index) {
 
 
 
-void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist) {
-	void json_parse(json_object * jobj, struct CommandList *comlist); /*Forward Declaration*/
+void parse_json_array( json_object *jobj, char *key, struct CommandList *comlist) {
+	void parse_json(json_object * jobj, struct CommandList *comlist); /*Forward Declaration*/
 	json_object *jarray = jobj; /*Simply get the array*/
 	if(key) {
 		json_object_object_get_ex(jobj, key, &jarray); /*Getting the array if it is a key value pair*/
@@ -104,12 +104,12 @@ void json_parse_array( json_object *jobj, char *key, struct CommandList *comlist
 	
 	for (i=0; i< arraylen; i++){
 		jvalue = json_object_array_get_idx(jarray, i); /*Getting the array element at position i*/
-		json_parse(jvalue, comlist);
+		parse_json(jvalue, comlist);
 	}
 }
 
 /*Parsing the json object*/
-void json_parse(json_object * jobj, struct CommandList *comlist) {
+void parse_json(json_object * jobj, struct CommandList *comlist) {
 	char * command;
 	char * options;
 	char * mask;
@@ -152,10 +152,10 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 			break; 
 		case json_type_object: 
 			json_object_object_get_ex(jobj, key, &jobj);
-			json_parse(jobj, comlist); 
+			parse_json(jobj, comlist); 
 			break;
 		case json_type_array: 
-			json_parse_array(jobj, key, comlist);
+			parse_json_array(jobj, key, comlist);
 			break;
 		}
 	}
@@ -180,7 +180,7 @@ void json_parse(json_object * jobj, struct CommandList *comlist) {
 
 // take a string and see if there is CSV list of ports we 
 // export the resulting array for use elsewhere
-int parsePorts(struct FilterList *filterlist, char *inbound, int loc) {
+int parse_ints(struct FilterList *filterlist, char *inbound, int loc) {
 	char* strCpy;
 	char** split; // array for the results
 	int mynum; // number of elements in the returned array
@@ -207,7 +207,7 @@ int parsePorts(struct FilterList *filterlist, char *inbound, int loc) {
 	return mynum;
 }
 
-int parseIPs(struct FilterList *filterlist, char *inbound, int loc) {
+int parse_strings(struct FilterList *filterlist, char *inbound, int loc) {
 	char* strCpy;
         char** split; // array for the results
 	int mynum; // number of elements in the returned array
@@ -254,19 +254,13 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 		case list:
 			break;
 		case exclude:
-			filterlist->arrindex[i] = parsePorts(filterlist, comlist->options[i], i);
-			break;
 		case include:
-			filterlist->arrindex[i] = parsePorts(filterlist, comlist->options[i], i);
+			filterlist->arrindex[i] = parse_ints(filterlist, comlist->options[i], i);
 			break;
 		case filterip:
-			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
-			break;
 		case appexclude:
-			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
-			break;
 		case appinclude:
-			filterlist->arrindex[i] = parseIPs(filterlist, comlist->options[i], i);
+			filterlist->arrindex[i] = parse_strings(filterlist, comlist->options[i], i);
 			break;
 		case report:
 			break;

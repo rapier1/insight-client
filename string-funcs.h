@@ -16,7 +16,12 @@
  */
 /* string-funcs.h */
 
+#ifndef STRING_FUNCS_H
+#define STRING_FUNCS_H
+
 int strpos (char *, char *);
 char** str_split( char*, char, int*);
 char *strip(char *);
 char *noquotes(char *);
+
+#endif
