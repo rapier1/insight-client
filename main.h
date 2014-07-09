@@ -16,6 +16,7 @@
  */
 
 #include <websock/websock.h> // websocket lib
+#include "uthash.h"
 
 //void getConnData (char **, int [], int, int, char**, int, char *);
 //void getConnData (char **, struct FilterList *);
@@ -23,3 +24,9 @@ void *analyzeInbound(libwebsock_client_state *, libwebsock_message *);
 int onmessage(libwebsock_client_state *, libwebsock_message *);
 int onopen(libwebsock_client_state *);
 int onclose(libwebsock_client_state *);
+
+typedef struct CmdLineCID {
+	int cid;
+	char cmdline[256];
+	UT_hash_handle hh;
+} CmdLineCID;

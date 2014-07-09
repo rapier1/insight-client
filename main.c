@@ -34,11 +34,14 @@
 #include "geoip.h"
 #include "version.h"
 #include "debug.h"
+#include "uthash.h"
 
 int debugflag = 0;
 int printjson = 0;
 
 MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
+
+struct CmdLineCID *cmdlines = NULL;
 
 void getMetricMask (struct estats_mask *mask, char *maskstring) {
 	const char *defaultmask = "25124,12,410000,90,0"; //if not mask passed by client UI use this
@@ -91,6 +94,30 @@ void getMetricMask (struct estats_mask *mask, char *maskstring) {
 	free(cp_strmask); // actually frees strmask
 }
 
+void add_cmdline(int cid, char *cmdline) {
+    struct CmdLineCID *s;
+
+    HASH_FIND_INT(cmdlines, &cid, s);
+    if (s == NULL) {
+	    s = (struct CmdLineCID*)malloc(sizeof(struct CmdLineCID));
+	    s->cid = cid;
+	    HASH_ADD_INT(cmdlines, cid, s);
+    }
+    strcpy(s->cmdline, cmdline);
+    return;
+}
+
+void get_cmdline_from_cid(char** appname, int cid) {
+	struct CmdLineCID *s;
+	HASH_FIND_INT(cmdlines, &cid, s);
+	if (s != NULL) {
+		*appname = strdup(s->cmdline);
+	} else {
+		*appname = strdup("\0");
+	}
+	return;
+}
+
 // taken from web10g logger and expanded upon in order to build a JSON data structure
 void getConnData (char **message, struct FilterList *filterlist) {
         struct estats_error* err = NULL;
@@ -105,8 +132,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
         struct estats_mask mask; // mask struct
 	char *maskstring = filterlist->mask;
 	enum RequestTypes request;
-	char *appname;
-	int appname_flag = 0;
+	char *appname = NULL;
 	int maxconn = 0;
 
 	// compute the mask based on the maskstring
@@ -125,6 +151,11 @@ void getConnData (char **message, struct FilterList *filterlist) {
 	// This creates the primary json container
 	json_object * jsonout = json_object_new_object();
 	json_object * data_array = json_object_new_array();
+
+	// build a hash of the cmdlines and cids
+	list_for_each(&clist->connection_info_head, ci, list) {
+		add_cmdline(ci->cid, ci->cmdline);
+	}
 	
 	// step through the list of clients
 	list_for_each(&clist->connection_head, cp, list) {
@@ -132,19 +163,12 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		
                 struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
 
+		get_cmdline_from_cid(&appname, atoi(asc.cid));
+
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
                 Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
-
-		// honestly this seems like the worst way to get the command line for the connection
-		// ever.
-		list_for_each(&clist->connection_info_head, ci, list) {
-			if (atoi(asc.cid) == ci->cid) {
-				appname_flag = 1;
-				appname = strdup(ci->cmdline);
-			}
-		}
 
 		// we have to go through this for each connection
 		for (i = 0; i < filterlist->maxindex; i++) {
@@ -190,10 +214,7 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		
 		// if any of the commands creates a flag we skip it. 
 		if (flag) {
-			if (appname_flag) {
-				free(appname);
-				appname_flag = 0;
-			}
+			free(appname);
 			flag = 0;
 			continue;
 		}
@@ -218,13 +239,8 @@ void getConnData (char **message, struct FilterList *filterlist) {
 		json_object_object_add (tuple_data, "DestIP", jdestip);
 		json_object_object_add (tuple_data, "DestPort", jdestport);
 		json_object_object_add (tuple_data, "Application", jappname);
+		free(appname);
 
-		//don't forget to free the appname
-		if (appname_flag) {
-			free(appname);
-			appname_flag = 0;
-		}
-		
 		// append the tupple data container to the connection data container
 		json_object_object_add (connection_data, "tuple", tuple_data);
 
@@ -299,7 +315,7 @@ Cleanup:
         estats_connection_list_free(&clist);
 	estats_val_data_free(&tcpdata);
         estats_nl_client_destroy(&cl);
-	
+
         if (err != NULL) {
 		PRINT_AND_FREE(err);
                 printf ("EXIT_FAILURE");
