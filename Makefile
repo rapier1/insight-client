@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS= -g -c -Wall 
-LDFLAGS= -lestats -ljson-c -lwebsock -lmaxminddb
+CFLAGS= -g -c -Wall -I/usr/include/mysql
+LDFLAGS= -L/usr/lib64/mysql -lestats -ljson-c -lwebsock -lmaxminddb -lmysqlclient
 SOURCES= main.c parse.c report.c string-funcs.c geoip.c debug.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE = insight

@@ -118,6 +118,10 @@ void parse_json(json_object * jobj, struct CommandList *comlist) {
 	char * empty = "\0";
 	enum json_type type;
 	
+	// we don't have a good option for when no option is passed.
+	// that's an issue that has to be addressed. We could just discard the command
+	// entirely as being incomplete. Of course, that requires the 'list' command to
+	// be passed with an empty options field.
 	json_object_object_foreach(jobj, key, val) { /*Passing through every array element*/
 		type = json_object_get_type(val);
 		if(strcmp(key, "command") == 0) {
@@ -225,7 +229,7 @@ int parse_strings(struct FilterList *filterlist, char *inbound, int loc) {
 		// which is obviously odd but lets accept it for now
 		return 0;
 	}
-	log_debug("ParseIP split value: %d", mynum);
+	log_debug("parse_strings split value: %d", mynum);
 	for ( i = 0; i < mynum; i++ ) {
 		log_debug("Split[%d]: %s for loc %d", i, split[i], loc);
 		filterlist->strings[loc][i] = malloc((strlen(split[i])+1) * sizeof(char));
@@ -251,8 +255,6 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 		if (request == -1) // couldn't map the command to the enum so ignore
 			continue;
 		switch (request) {
-		case list:
-			break;
 		case exclude:
 		case include:
 			filterlist->arrindex[i] = parse_ints(filterlist, comlist->options[i], i);
@@ -263,7 +265,7 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 			filterlist->arrindex[i] = parse_strings(filterlist, comlist->options[i], i);
 			break;
 		case report:
-			break;
+		case list:
 		default:
 			break;
 		}

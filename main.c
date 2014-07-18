@@ -39,7 +39,7 @@
 int debugflag = 0;
 int printjson = 0;
 
-MMDB_s mmdb; //define the db handle as a global. possibly bad form but we can revist
+MMDB_s geoipdb; //define the db handle as a global. possibly bad form but we can revist
 
 struct CmdLineCID *cmdlines = NULL;
 
@@ -153,6 +153,9 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
         Chk(estats_connection_list_new(&clist));
 	Chk(estats_nl_client_set_mask(cl, &mask));
         Chk(estats_list_conns(clist, cl));
+	// this call is expensive because the library
+	// compares the pid of the cids to every pid in proc
+	// may want to look at rewriting the library call to use a hash
 	Chk(estats_connection_list_add_info(clist));
 
 	// create the tcpdata struct
@@ -225,6 +228,10 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			
 		}
 		
+		// we don't want to report on our own connection to the websocket. that's silly.
+		if (strcmp(appname, "insight") == 0)
+			flag = 1;
+
 		// if any of the commands creates a flag we skip it. 
 		if (flag) {
 			free(appname);
@@ -266,8 +273,8 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		json_object_object_add(connection_data, "time", jtime);
 
 		// get the latitude and longitude of the remote address
-		double latitude = geoip_lat_or_long(asc.rem_addr, mmdb, "latitude");
-		double longitude = geoip_lat_or_long(asc.rem_addr, mmdb, "longitude");
+		double latitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "latitude");
+		double longitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "longitude");
 
 		// printf("%s, lat: %f, long: %f\n", asc.rem_addr, latitude, longitude);
 		json_object *jlat = json_object_new_double(latitude);
@@ -316,8 +323,8 @@ Continue:
 	json_object_object_add(jsonout, "DATA", data_array); 
 		
        	// convert the json object to a string
-	*message = malloc(strlen(json_object_to_json_string(jsonout)+1) * sizeof(*message));
-	strcpy(*message, (char *)json_object_to_json_string(jsonout));
+	*message = malloc(strlen(json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY)+1) * sizeof(*message));
+	strcpy(*message, (char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY));
 	
 	log_info("%s\n", *message);
 	log_debug("Processed %d of %d connections", shownconn, maxconn);
@@ -340,14 +347,16 @@ Cleanup:
 }
 
 // figure out what we are doing with the incoming requests
+// we take the incoming string and tokenize it into a json object
+// we then convert the json object into a struct holding all of the
+// commands. this struct is then converted into a filterlist which
+// is better suited for the filter routines we have
 void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)  
 {
 	// store the data as a char
 	char *request = msg->payload;
         char *message;
-	char **ips = NULL;
 	int i, j = 0;
-	int free_flag = 0;
 	json_tokener *tok = json_tokener_new();
 	json_object *json_in = NULL;
 	enum json_tokener_error jerr;
@@ -394,10 +403,26 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		log_debug("mask: %s", comlist->mask);
 	}
 
+	if (strcmp(comlist->commands[0], "report") == 0) {
+		if(report_create_from_json_string(comlist->options[0]) != 1){
+			//report failure;
+		}
+		goto Cleanup;
+	}
+
+
 	// filterlist is what we will be using to, ya know, filter the data. 
 	filterlist = malloc(sizeof(FilterList));
 	parse_comlist(comlist, filterlist);
 
+	// done with comlist so free it up now. 
+	for (i = 0; i < comlist->maxindex; i++) {
+		free(comlist->commands[i]);
+		free(comlist->options[i]);
+	}
+	free(comlist->mask);
+	free(comlist);
+	
 	// print out what we have for debug purposes
 	if (debugflag) {
 		log_debug ("INBOUND COMMANDS");
@@ -437,21 +462,16 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	}
 	// we now have a struct that contains all of the 
 	// various commands, arrays, and index values
-
+	// so build the json string
 	get_connection_data(&message, filterlist); 
+
 	log_debug("message length: %d",(int)strlen(message)); 
+	
+	// now we send it to the socket 
 	libwebsock_send_text_with_length(state, message, strlen(message));
 	
-	for (i = 0; i < comlist->maxindex; i++) {
-	  free(comlist->commands[i]);
-	  free(comlist->options[i]);
-	}
-	free(comlist->mask);
-	free(comlist);
-	
-
-
-	// we have to go through this for each connection
+	// free up the filterlist struct we use a case statement here
+	// because not everything is malloc'd and we don't want a bad free
 	for (i = 0; i < filterlist->maxindex; i++) {
 		requests = parse_string_to_enum(filterlist->commands[i]);
 		free(filterlist->commands[i]);
@@ -469,30 +489,20 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 			free(filterlist->strings[i]);
 			break;
 		case report:
-			break;
 		case list:
-			break;
 		default:
 			break;
 		}
 	}
 	free(filterlist->mask);
 	free(filterlist);
+	free(message); // free the json string
 
+Cleanup:
 	// free the inbound jason object and token
 	json_object_put(json_in);
 	json_tokener_free(tok);
-	free(message);
 
-
-	// if we used ip filter we need to free the memory. 
-	if (free_flag) {
-		for (i = 0; i < 20; i++) {
-			free(ips[i]);
-		}
-		free(ips);
-		free_flag = 0;
-	}
 	return NULL;
 }
 
@@ -505,6 +515,9 @@ void usage(void) {
 	printf ("\t-j print outbound json string to stdout\n");
 }
 
+// once we have an incoming message on the connection do something 
+// with it. for the most part we only expect text. Anything else
+// throws a non-fatal exception
 int
 onmessage(libwebsock_client_state *state, libwebsock_message *msg)
 {
@@ -520,6 +533,7 @@ onmessage(libwebsock_client_state *state, libwebsock_message *msg)
 	return 0;
 }
 
+// confirm that the connection has been established
 int
 onopen(libwebsock_client_state *state)
 {
@@ -527,6 +541,7 @@ onopen(libwebsock_client_state *state)
 	return 0;
 }
 
+// when we close do we need to do anything? Probably not. 
 int
 onclose(libwebsock_client_state *state)
 {
@@ -536,7 +551,7 @@ onclose(libwebsock_client_state *state)
 
 int main(int argc, char *argv[])
 {
-	libwebsock_context *ctx = NULL;
+	libwebsock_context *wssocket = NULL;
 	char* port = "9000";
 	char* geoippath = "/home/rapier/websockets/test/GeoLite2-City.mmdb";
 	int opt;
@@ -566,7 +581,7 @@ int main(int argc, char *argv[])
                 }
         }
 
-	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &mmdb);
+	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &geoipdb);
 	if (MMDB_SUCCESS != status) {
 	  printf("Can't open db\n");
 	  return 0;
@@ -574,19 +589,19 @@ int main(int argc, char *argv[])
 
 	printf ("geoIP database opened and ready\n");
 
-	ctx = libwebsock_init();
-	if (ctx == NULL ) {
+	wssocket = libwebsock_init();
+	if (wssocket == NULL ) {
 		fprintf(stderr, "Error during libwebsock_init.\n");
 		exit(1);
 	}
-	libwebsock_bind(ctx, "127.0.0.1", port);
+	libwebsock_bind(wssocket, "127.0.0.1", port);
 	fprintf(stderr, "libwebsock listening on port %s\n", port);
-	ctx->onmessage = onmessage;
-	ctx->onopen = onopen;
-	ctx->onclose = onclose;
-	libwebsock_wait(ctx);
+	wssocket->onmessage = onmessage;
+	wssocket->onopen = onopen;
+	wssocket->onclose = onclose;
+	libwebsock_wait(wssocket);
 	//perform any cleanup here.
 	fprintf(stderr, "Exiting.\n");
-	MMDB_close(&mmdb);
+	MMDB_close(&geoipdb);
 	return 0;
 }

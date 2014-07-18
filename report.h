@@ -24,18 +24,23 @@ typedef struct reportinfo {
 	int cid;
 	char *uri;
 	int port;
+	char *db;
 	char *dbname;
 	char *dbpass;
 	char *nocemail;
 	char *fname;
 	char *lname;
 	char *email;
+	char *phone;
 	char *institution;
 } reportinfo;
 
-void report_parse (json_object *, reportinfo *);
+int report_create_from_json_string(char *);
+int report_parse (json_object *, reportinfo *);
 void report_dump (reportinfo *);
 void report_free (reportinfo *);
 int report_sql (reportinfo *, char *);
-
+int report_create_data_query (char *, char **, char **);
+int report_parse_json_object (json_object *, char **, char **);
+int report_parse_json_array (json_object *, char * , char ** , char ** );
 #endif

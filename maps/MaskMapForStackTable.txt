@@ -41,6 +41,6 @@ Mask Map for Stack Table
  2000000000	CurRetxQueue				*	*			*	*			*	*			*	*
  4000000000	MaxRetxQueue						*	*	*	*					*	*	*	*
  8000000000	CurReasmQueue										*	*	*	*	*	*	*	*
-10000000000	MaxReasmQueue			*		*		*		*		*		*		*		*
-20000000000	EarlyRetrans				*	*			*	*			*	*			*	*
-40000000000	EarlyRetransDelay					*	*	*	*					*	*	*	*
+10000000000	MaxReasmQueue			*		*		
+20000000000	EarlyRetrans				*	*		
+40000000000	EarlyRetransDelay					*	

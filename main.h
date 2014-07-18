@@ -15,7 +15,10 @@
  *
  */
 
+#ifndef MAIN_H
+#define MAIN_H
 #include <websock/websock.h> // websocket lib
+#include "estats/estats.h"
 #include "uthash.h"
 #include "parse.h"
 
@@ -34,3 +37,4 @@ typedef struct CmdLineCID {
 	char cmdline[256];
 	UT_hash_handle hh;
 } CmdLineCID;
+#endif

@@ -25,5 +25,5 @@ Mask Map for Path Table
  200000	DupAckEpisodes					*	*			*	*			*	*			*	*
  400000	RcvRTT								*	*	*	*					*	*	*	*
  800000	DupAksOut											*	*	*	*	*	*	*	*
-1000000	CERcvd					*		*		*		*		*		*		*		*
-2000000	ECESent						*	*			*	*			*	*			*	*
+1000000	CERcvd					*		*
+2000000	ECESent						*	*
