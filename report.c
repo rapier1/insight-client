@@ -22,6 +22,7 @@
 #include "mysql.h"
 #include "my_global.h"
 #include "string-funcs.h"
+#include "debug.h"
 
 int report_parse (json_object *json_in, reportinfo *report) {
 	enum json_type type;
@@ -128,54 +129,49 @@ void report_dump(reportinfo *report) {
 // function to take the incoming json string and report struct
 // and build a valid sql query, submit it to the db, and alert the NOC
 int report_sql(reportinfo* report, char* message) {
-	// open the connection
-	char *query;
-	char valfmt[1024];
 	MYSQL *con = mysql_init(NULL);
 	MYSQL_RES *results;
 	MYSQL_ROW row;
+	char *data_query_str;
+	char *flow_query_str;
+	char query[1024]; // likely an excessive size
 	char uid[11];
 	char fid[11];
 	char sid[11];
 	char rid[11];
 	char timestamp[20];
-	char *data_query_str;
-	char *flow_query_str;
 
+	// open the connection
 	if (mysql_real_connect(con, report->uri, report->dbname, 
-			   report->dbpass, report->db, 
+			       report->dbpass, report->db, 
 			       report->port, NULL, 0) == NULL) {
 		//error connecting to database
+		fprintf(stderr, "%s\n", mysql_error(con));
 		return -1;
-	}
+ 	}
 	// we have a valid connection
 	// check to see if we have an existing entry for that email address
-	query = "SELECT uemail FROM userinfo WHERE uemail='";
-	strncat(query, report->email, strlen(report->email));
-	strncat(query, "'", 1);
+	sprintf(query, "SELECT uemail FROM userinfo WHERE uemail='%s'", report->email);
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		//error from statement
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} else {
 		results = mysql_store_result(con);
 		if (results == NULL) {
 			//user does not exist so insert them into the database
-			sprintf (valfmt, "('%s', '%s', '%s', '%s', '%s')", 
+			sprintf(query, 
+				"INSERT INTO userinfo (uemail, ufname, ulname, uinstitution, uphone) VALUES ('%s', '%s', '%s', '%s', '%s')",
 				 report->email,
 				 report->fname,
 				 report->lname,
 				 report->institution,
 				 report->phone);
-			sprintf(query, 
-				"INSERT INTO userinfo (uemail, ufname, ulname, uinstitution, uphone) VALUES ('%s', '%s', '%s', '%s', '%s')",
-				report->email,
-				report->fname,
-				report->lname,
-				report->institution,
-				report->phone);
-			strncat(query, valfmt, strlen(valfmt));
+			log_debug("Query: %s", query);
 			if (mysql_query(con, query) != 0) {
 				//error from statement
+				fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 				return -1;
 			}
 		}
@@ -185,8 +181,10 @@ int report_sql(reportinfo* report, char* message) {
 	// okay, a user exists in the database, one way or the other, now
 	// so get their uid so we can use it in the other tables
 	sprintf(query, "SELECT uid FROM userinfo WHERE uemail='%s'", report->email);
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
 	results = mysql_store_result(con);
@@ -203,16 +201,20 @@ int report_sql(reportinfo* report, char* message) {
 
 	//we know have a data query string and a flow query string. We can insert those into the 
 	// database. 
+	log_debug("Data Query: %s", data_query_str);
 	if (mysql_query(con, data_query_str) != 0) {
 		//error from statement
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		free(data_query_str);
 		free(flow_query_str);
 		return -1;
 	}
 	free (data_query_str);
 
+	log_debug("Flow Query: %s", flow_query_str);
 	if (mysql_query(con, flow_query_str) != 0) {
 		//error from statement
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		free(data_query_str);
 		free(flow_query_str);
 		return -1;
@@ -221,9 +223,11 @@ int report_sql(reportinfo* report, char* message) {
 
 
 	// get the sid by querying for the last incremented autoinc from this client
-	query = "SELECT LAST_INSERT_ID() FROM data";
+	strcpy(query, "SELECT LAST_INSERT_ID() FROM data");
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
 	results = mysql_store_result(con);
@@ -232,10 +236,11 @@ int report_sql(reportinfo* report, char* message) {
 	strcpy(sid, row[0]);
 
 	// now get the timestamp
-	query = "SELECT time FROM data WHERE sid=";
-	strncat(query, sid, strlen(sid));
+	sprintf(query, "SELECT time FROM data WHERE sid=%s", sid);
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
 	results = mysql_store_result(con);
@@ -245,14 +250,18 @@ int report_sql(reportinfo* report, char* message) {
 
 	// now we populate the report table so we can get the report id we need for the 
 	// flow data
-	sprintf (query, "INSERT INTO report ( uid, sid, ts_stat) VALUES (%s, %s, %s)", uid, sid, timestamp);
+	sprintf (query, "INSERT INTO report ( uid, sid, ts_stat) VALUES (%s, %s, %s)", 
+		 uid, sid, timestamp);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
-	query = "SELECT LAST_INSERT_ID() FROM report";
+	strcpy(query, "SELECT LAST_INSERT_ID() FROM report");
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
 	results = mysql_store_result(con);
@@ -261,9 +270,11 @@ int report_sql(reportinfo* report, char* message) {
 	strcpy(rid, row[0]);	
 
 	// get the fid by querying for the last incremented autoinc from this client
-	query = "SELECT LAST_INSERT_ID() FROM flow";
+	strcpy(query, "SELECT LAST_INSERT_ID() FROM flow");
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 
 	results = mysql_store_result(con);
@@ -273,15 +284,19 @@ int report_sql(reportinfo* report, char* message) {
 	
 	// now update the flow table with the report id
 	sprintf (query, "UPDATE flow rid=%s WHERE fid=%s", rid, fid);
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 	
 
 	// and also update the data table with flow id
 	sprintf(query, "UPDATE data fid=%s WHERE sid=%s", fid, sid);
+	log_debug("Query: %s", query);
 	if (mysql_query(con, query) != 0) {
 		// error
+		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 		return -1;
 	} 	
 
@@ -349,7 +364,11 @@ int report_parse_json_object (json_object *json_in, char** dq_string, char** fq_
 	char *key_str;
 	char *val_str;
 	char *delim = ", ";
-	char *daddr, *saddr, *dport, *sport, *application;
+	char *daddr = NULL; 
+	char *saddr = NULL; 
+	char *dport = NULL;
+	char *sport = NULL; 
+	char *application = NULL;
 	int idx = 0;
 	int i = 0; 
 	
@@ -392,7 +411,8 @@ int report_parse_json_object (json_object *json_in, char** dq_string, char** fq_
 	}
 	key_str = join_strings(*key_arr, delim, i);	
 	val_str = join_strings(*val_arr, delim, i);
-	printf ("%s, %s\n", key_str, val_str);
+	log_debug ("Key string: %s", key_str);
+	log_debug ("Value string: %s", val_str)
 	*dq_string = malloc((strlen(key_str) + strlen(val_str) + 40) * sizeof(char));
 	*fq_string = malloc(((strlen(daddr) + strlen(dport) + 
 			      strlen(saddr) + strlen(sport) + 
@@ -441,24 +461,42 @@ int report_create_from_json_string (char *incoming) {
 		fprintf(stderr, "Poorly formed JSON object. Check for extraneous characters.");
 		return -1;
 	}
-
-	filterlist = malloc(sizeof(struct FilterList));
 	report = malloc(sizeof(struct reportinfo));
 	if (report_parse(json_in, report) != 1) {
 		// error here
+		log_debug("Could not parse the json object in report_parse");
+		report_free(report);
 		return -1;
 	}
 	// filterlist only needs a "report" command and the connection id
+	filterlist = malloc(sizeof(struct FilterList));
 	filterlist->commands[0] = strdup("report");
 	filterlist->reportcid = report->cid;
 	// get the flow data we are sending to the NOC
 	get_connection_data(&message, filterlist);
-	if (report_sql(report, message) != 1) {
-		//error here
+	// TODO: i need to find out what the length of the message will
+	// be if it doesn't return any data at all. It might be zero
+	// but you need to check. 
+	if (strlen(message) < 5) { 
+		// the cid expired 
+		log_debug("Empty Message in report_create_from_json_string");
+		free(filterlist->commands);
+		free(filterlist);
 		report_free(report);
 		free(message);
 		return -1;
 	}
+	if (report_sql(report, message) != 1) {
+		//error here
+		log_debug("report_sql returned an error");
+		free(filterlist->commands);
+		free(filterlist);
+		report_free(report);
+		free(message);
+		return -1;
+	}
+	free(filterlist->commands);
+	free(filterlist);
 	report_free(report);
 	free(message);
 	return 1;

@@ -404,9 +404,15 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	}
 
 	if (strcmp(comlist->commands[0], "report") == 0) {
+		char *response;
 		if(report_create_from_json_string(comlist->options[0]) != 1){
-			//report failure;
+			//create a special json string to indicate that there
+			//was an error with the attempt to make a report
+			response = "{\"function\":\"report\", \"result\":\"failure\"}";
 		}
+		response = "{\"function\":\"report\", \"result\":\"success\"}";
+	        // send the result back to the client and then cleanup
+		libwebsock_send_text_with_length(state, response, strlen(response));
 		goto Cleanup;
 	}
 
