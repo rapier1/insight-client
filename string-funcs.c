@@ -106,8 +106,7 @@ char *noquotes(char *string) {
 	return string;
 }
 
-char* join_strings(char* strings[], char* seperator, int count) {
-    char* str = NULL;             /* Pointer to the joined strings  */
+void join_strings(char **buf, char **strings, char *seperator, int count) {
     size_t total_length = 0;      /* Total length of joined strings */
     int i = 0;                    /* Loop counter                   */
 
@@ -116,14 +115,14 @@ char* join_strings(char* strings[], char* seperator, int count) {
     total_length++;     /* For joined string terminator */
     total_length += strlen(seperator) * (count - 1); // for seperators
 
-    str = (char*) malloc(total_length);  /* Allocate memory for joined strings */
-    str[0] = '\0';                      /* Empty string we can append to      */
+    *buf = malloc((total_length+1) * sizeof(char));  /* Allocate memory for joined strings */
+    *buf[0] = '\0';                      /* Empty string we can append to      */
 
     /* Append all the strings */
     for (i = 0; i < count; i++) {
-        strcat(str, strings[i]);
-        if (i < (count - 1)) strcat(str, seperator);
+        strcat(*buf, strings[i]);
+        if (i < (count - 1)) strcat(*buf, seperator);
     }
 
-    return str;
+//    return str;
 }

@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2013 The Board of Trustees of Carnegie Mellon University.
  *
@@ -35,6 +36,8 @@
 #include "version.h"
 #include "debug.h"
 #include "uthash.h"
+#include "mysql.h"
+#include "my_global.h"
 
 int debugflag = 0;
 int printjson = 0;
@@ -44,15 +47,16 @@ MMDB_s geoipdb; //define the db handle as a global. possibly bad form but we can
 struct CmdLineCID *cmdlines = NULL;
 
 void get_metric_mask (struct estats_mask *mask, char *maskstring) {
-	const char *defaultmask = "25124,12,410000,90,0"; //if not mask passed by client UI use this
+	const char *defaultmask = ",,,,"; //if not mask passed by client UI use this
         char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
         uint64_t tmpmask = NULL;
         const char delim = ',';
 	int i = 0;
+	int masklength = 0;
 
 	if (maskstring != NULL) {
-		int masklength = strlen(maskstring);
+		masklength = strlen(maskstring);
 		// if the length of the mask is 0 then treat that as no passed mask
 		// otherwise it will default to a full report
 		if (masklength != 0) {
@@ -64,6 +68,7 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 		strmask = strdup(defaultmask);
 	}
 	
+	printf ("length is %d for strmask of %s\n\n", masklength, strmask);
 	// we need to maintain a copy of the pointer of strmask so we can free it
 	// as the ponter is shifted by strsep
 	cp_strmask = strmask;
@@ -368,6 +373,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	// it should be of the form 
 	// {"index": { "command": <command>, "options": {"opt1":<option>,...}}}
 	// or {array{string, array{strings}}}
+	log_debug("REQUEST: %s\n", request);
 	json_in = json_tokener_parse_ex(tok, request, strlen(request));
 	while ((jerr = json_tokener_get_error(tok)) == json_tokener_continue);
 	if (jerr != json_tokener_success)
@@ -413,6 +419,13 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		response = "{\"function\":\"report\", \"result\":\"success\"}";
 	        // send the result back to the client and then cleanup
 		libwebsock_send_text_with_length(state, response, strlen(response));
+		// done with comlist so free it up now. 
+		for (i = 0; i < comlist->maxindex; i++) {
+			free(comlist->commands[i]);
+			free(comlist->options[i]);
+		}
+		free(comlist->mask);
+		free(comlist);
 		goto Cleanup;
 	}
 
@@ -513,7 +526,7 @@ Cleanup:
 }
 
 void usage(void) {
-	printf ("Insight Web10G client. Version: %3.2f\n", VERSION);
+	printf ("Insight Web10G client. Version: %3.2f\n", INSIGHT_VERSION);
 	printf ("\t-h this help screen\n");
 	printf ("\t-p listen port\n");
 	printf ("\t-g path to geoip database\n");
@@ -561,6 +574,7 @@ int main(int argc, char *argv[])
 	char* port = "9000";
 	char* geoippath = "/home/rapier/websockets/test/GeoLite2-City.mmdb";
 	int opt;
+	mysql_library_init(0, NULL, NULL);
 
         while ((opt = getopt(argc, argv, "hp:g:dj")) != -1) {
                 switch (opt) {
@@ -609,5 +623,6 @@ int main(int argc, char *argv[])
 	//perform any cleanup here.
 	fprintf(stderr, "Exiting.\n");
 	MMDB_close(&geoipdb);
+	mysql_library_end();
 	return 0;
 }

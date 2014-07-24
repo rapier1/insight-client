@@ -21,8 +21,8 @@
 
 int strpos (char *, char *);
 char** str_split( char*, char, int*);
-char *strip(char *);
-char *noquotes(char *);
-char* join_strings(char* , char* , int);
+char* strip(char *);
+char* noquotes(char *);
+void join_strings(char **, char** , char* , int);
 
 #endif

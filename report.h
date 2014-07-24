@@ -20,6 +20,18 @@
 
 #include "json-c/json.h"
 
+typedef struct jsondata {
+	char *key_arr[150];
+	char *val_arr[150];
+	char *daddr;
+	char *saddr;
+	char *dport;
+	char *sport;
+	char *application;
+	int idx;
+} jsondata;
+
+
 typedef struct reportinfo {
 	int cid;
 	char *uri;
@@ -41,6 +53,6 @@ void report_dump (reportinfo *);
 void report_free (reportinfo *);
 int report_sql (reportinfo *, char *);
 int report_create_data_query (char *, char **, char **);
-int report_parse_json_object (json_object *, char **, char **);
-int report_parse_json_array (json_object *, char * , char ** , char ** );
+void report_parse_json_object (json_object *, jsondata *);
+void report_parse_json_array (json_object *, char *, jsondata * );
 #endif
