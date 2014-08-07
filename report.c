@@ -18,13 +18,22 @@
 #include <stdio.h>
 #include <string.h>
 #include "report.h"
-#include "main.h"
-#include "mysql.h"
-#include "my_global.h"
-#include "string-funcs.h"
-#include "debug.h"
 
 int report_parse (json_object *json_in, reportinfo *report) {
+	// initialize the report structure
+	// if they don't pass something we need to be able to know
+	report->cid = 0;
+	report->uri = "\0";
+	report->port = 0;
+	report->lname = "\0";
+	report->fname = "\0";
+	report->email = "\0";
+	report->db = "\0";
+	report->dbname = "\0";
+	report->dbpass = "\0";
+	report->nocemail = "\0";
+	report->institution = "\0";
+	report->phone = "\0";
 	enum json_type type;
 	json_object_object_foreach (json_in, key, val) {
 		type = json_object_get_type(val);
@@ -124,21 +133,45 @@ void json_result_free(jsondata *result) {
 	free(result);
 }
 
+void report_dump (reportinfo *report) {
+	printf("cid %d\n", report->cid);
+	printf("port %d\n", report->port);
+	printf("uri %s\n", report->uri);
+	printf("db %s\n", report->db);
+	printf("dbname %s\n", report->dbname);
+	printf("dbpass %s\n", report->dbpass);
+	printf("fname %s\n", report->fname);
+	printf("lname %s\n", report->lname);
+	printf("nocemail %s\n", report->nocemail);
+	printf("email %s\n", report->email);
+	printf("phone %s\n", report->phone);
+	printf("institution %s\n", report->institution);
+}
 
-void report_dump(reportinfo *report) {
-	  printf("cid: %d\n", report->cid);
-	  printf("port: %d\n", report->port);
-	  printf("uri : %s\n", report->uri);
-	  printf("db : %s\n", report->db);
-	  printf("dbname : %s\n", report->dbname);
-	  printf("dbpass : %s\n", report->dbpass);
-	  printf("fname : %s\n", report->fname);
-	  printf("lname : %s\n", report->lname);
-	  printf("nocemail : %s\n", report->nocemail);
-	  printf("email : %s\n", report->email);
-	  printf("phone : %s\n", report->phone);
-	  printf("institution : %s\n", report->institution);
-	  return;
+void report_sanitize(reportinfo *report, MYSQL *con) {
+	char *from;
+	//report_dump(report);
+	from = report->uri;
+	mysql_real_escape_string(con, report->uri, from, strlen(from));
+	from = report->db;
+	mysql_real_escape_string(con, report->db, from, strlen(from));
+	from = report->dbname;
+	mysql_real_escape_string(con, report->dbname, from, strlen(from));
+	from = report->dbpass;
+	mysql_real_escape_string(con, report->dbpass, from, strlen(from));
+	from = report->fname;
+	mysql_real_escape_string(con, report->fname, from, strlen(from));
+	from = report->lname;
+	mysql_real_escape_string(con, report->lname, from, strlen(from));
+	from = report->nocemail;
+	mysql_real_escape_string(con, report->nocemail, from, strlen(from));
+	from = report->email;
+	mysql_real_escape_string(con, report->email, from, strlen(from));
+	from = report->phone;
+	mysql_real_escape_string(con, report->phone, from, strlen(from));
+	from = report->institution;
+	mysql_real_escape_string(con, report->institution, from, strlen(from));
+	return;
 }
 
 // function to take the incoming json string and report struct
@@ -157,8 +190,8 @@ int report_sql(reportinfo* report, char* message) {
 	char timestamp[20];
 	
 	if (con == NULL) {
-		printf("Could not initialize MySql");
-		return -1;;
+		fprintf(stderr, "Could not initialize MySql");
+		return -1;
 	}
 
 	// open the connection
@@ -170,7 +203,10 @@ int report_sql(reportinfo* report, char* message) {
 		return -1;
 	}
 
-	// we have a valid connection
+	// we have a valid connection now we want to make sure all of the user input
+	// is properly sanitized by running the user input through an string escape function
+	report_sanitize(report, con);
+
 	// check to see if we have an existing entry for that email address
 	snprintf(query, strlen(report->email) + 50, "SELECT uid FROM userinfo WHERE uemail='%s'", report->email); 
 	log_debug("USER Query: %s", query); 
@@ -182,6 +218,7 @@ int report_sql(reportinfo* report, char* message) {
 		results = mysql_store_result(con);
 		if (mysql_num_rows(results) == 0) {
 			//user does not exist so insert them into the database
+			MYSQL_RES *uid_result;
 			sprintf(query,
 				"INSERT INTO userinfo (uemail, ufname, ulname, uinstitution, uphone) VALUES ('%s', '%s', '%s', '%s', '%s')",
 				report->email,
@@ -195,30 +232,32 @@ int report_sql(reportinfo* report, char* message) {
 				fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
 				return -1;
 			}
+
+			// now grab the new users UID
+			strcpy(query, "SELECT LAST_INSERT_ID() FROM userinfo");
+			log_debug("New user UID Query: %s", query); 
+			if (mysql_real_query(con, query, (unsigned int)strlen(query)) != 0) {
+				// error
+				fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
+				free(flow_query_str);
+				return -1;
+			}
+			uid_result = mysql_store_result(con);
+			if ((mysql_num_rows(uid_result)) == 0) {
+				mysql_free_result(results);
+				printf("Could not get new user User Id\n");
+				return -1;
+			}
+			row = mysql_fetch_row(uid_result);
+			strcpy(uid, row[0]);
+			mysql_free_result(uid_result);
+		} else {
+			// they exist so get a user id from the first query
+			row = mysql_fetch_row(results);
+			strcpy(uid, row[0]);
 		}
 		mysql_free_result(results);
 	}
-
-	// okay, a user exists in the database, one way or the other, now
-	// so get their uid so we can use it in the other tables
-	snprintf(query, strlen(report->email) + 50, "SELECT uid FROM userinfo WHERE uemail='%s'", report->email); 
-	log_debug("UID Query: %s", query); 
-	if (mysql_real_query(con, query, (unsigned int)strlen(query)) != 0) {
-		// error
-		fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
-		return -1;
-	}
-	results = mysql_store_result(con);
-	if ((mysql_num_rows(results)) == 0) {
-		mysql_free_result(results);
-		printf("Could not get User Id\n");
-		return -1;
-	}
-	row = mysql_fetch_row(results);
-	strcpy(uid, row[0]);
-	mysql_free_result(results);
-	
-
 
 	// now we have to parse the incoming message structure and build a valid SQL query from it.
 	// no problem right? WRONG!! The message is in char format and for ease of use we need to
@@ -375,8 +414,10 @@ int report_sql(reportinfo* report, char* message) {
 	mysql_free_result(results);
 
 	mysql_close(con); // free the mysql connection
-	mysql_thread_end();
-	/* // that should be all of the database foo.  */
+	// this is in a threaded environment and mysql_init 
+	// is calling a thread that we must explicitly close
+	mysql_thread_end(); 
+	// that should be all of the database foo. 
 	return 1;
 }
 
@@ -388,7 +429,6 @@ int report_create_data_query (char* request, char** dq_string, char** fq_string)
 	char *key_str = NULL;
 	char *val_str = NULL;
 	char *delim = ", ";
-	int i = 0;
 
 	// grab the incoming json string
 	json_in = json_tokener_parse_ex(tok, request, strlen(request));
@@ -409,6 +449,7 @@ int report_create_data_query (char* request, char** dq_string, char** fq_string)
 		fprintf(stderr, "Poorly formed JSON object. Check for extraneous characters.");
 		return -1;
 	}
+
 	// we have a validated json_object assembled from our incoming character string
 	// parse the object and place the tuple information in fq_string and the 
 	// data into dq_string
@@ -419,23 +460,18 @@ int report_create_data_query (char* request, char** dq_string, char** fq_string)
 	report_parse_json_object(json_in, json_result);
 
 	if (json_result->idx == 0) {// problem generating the data array
-		json_result_free(json_result);
 		json_object_put(json_in);
 		json_tokener_free(tok);		
 		return -1;
 	}
 
-	for (i = 0; i < json_result->idx; i++)
-		printf ("key:val[%d] %s:%s\n", i, json_result->key_arr[i], json_result->val_arr[i]);
-
+	// take the arrays we've assembled and turn them in delimited strings
 	join_strings(&key_str, json_result->key_arr, delim, json_result->idx);
 	join_strings(&val_str, json_result->val_arr, delim, json_result->idx);
-	log_debug ("KEY STR: %s", key_str);
-	log_debug ("VAL STR: %s", val_str);
-	*dq_string = malloc((strlen(key_str) + strlen(val_str) + 40) * sizeof(char));
+	*dq_string = malloc((strlen(key_str) + strlen(val_str) + 35) * sizeof(char));
 	*fq_string = malloc(((strlen(json_result->daddr) + strlen(json_result->dport) +
 			      strlen(json_result->saddr) + strlen(json_result->sport) +
-			      strlen(json_result->application) + 100)) * sizeof(char));
+			      strlen(json_result->application) + 95)) * sizeof(char));
 	sprintf(*dq_string, "INSERT INTO data (%s) VALUES (%s)", key_str, val_str);
 	sprintf(*fq_string,
 		"INSERT INTO flow (daddr, dport, saddr, sport, application) VALUES ('%s', '%s', '%s', '%s', '%s')",
@@ -443,6 +479,8 @@ int report_create_data_query (char* request, char** dq_string, char** fq_string)
 		json_result->sport, json_result->application);
 	log_debug("%s", *dq_string);
 	log_debug("%s", *fq_string);
+
+	// free everything up we no longer need
 	free(key_str);
 	free(val_str);
 	json_result_free(json_result);
@@ -468,9 +506,8 @@ void report_parse_json_array (json_object *json_in, char* key, jsondata* json_re
 	}
 }
 
-// this is arecursiove function so all of the variables you allocate in here won't
-// survive mor than one pass you need to create a struct and allocate it in the 
-// calling function. 
+// recursive function to step through the json object and find the data we
+// care about. Similar to routine in parse.c but getting different data
 void report_parse_json_object (json_object *json_in, jsondata *json_result) {
 	enum json_type type;
 	char value[50];
@@ -500,6 +537,8 @@ void report_parse_json_object (json_object *json_in, jsondata *json_result) {
 				json_result->application = strdup((char *)json_object_get_string(val));
 				log_debug("APP = %s", json_result->application);
 			} else {
+				// don't want either of these in the final data
+				// may change our mind though
 				if (strcmp(key, "lat") == 0)
 					continue;
 				if (strcmp(key, "long") == 0)
@@ -533,6 +572,7 @@ int report_create_from_json_string (char *incoming) {
 	json_tokener *tok = json_tokener_new();
 	json_object *json_in = NULL;
 	enum json_tokener_error jerr;
+	int myerr = 0;
 
 	json_in = json_tokener_parse_ex(tok, incoming, strlen(incoming));
 
@@ -550,6 +590,7 @@ int report_create_from_json_string (char *incoming) {
 		// this is when we get characters appended to the end of the json object
 		// since this shouldn't be sent from the UI we'll just return null and wait for 
 		// a new message
+		json_tokener_free(tok);
 		fprintf(stderr, "Poorly formed JSON object. Check for extraneous characters.");
 		return -1;
 	}
@@ -567,48 +608,39 @@ int report_create_from_json_string (char *incoming) {
 	filterlist = malloc(sizeof(struct FilterList));
 	filterlist->commands[0] = strdup("report");
 	filterlist->reportcid = report->cid;
-	//filterlist->mask = strdup("ffffffff,fffffff,fffffffffff,fff,f");
-	filterlist->mask = strdup("f,f,f,f,f");
+	filterlist->mask = strdup("fffffffff,3ffffff,7ffffffffff,fff,f,3");
 	filterlist->maxindex = 1;
 
 	// get the flow data we are sending to the NOC
 	get_connection_data(&message, filterlist);
 	log_debug("Message: %s", message);
 
-	// TODO: i need to find out what the length of the message will
-	// be if it doesn't return any data at all. It might be zero
-	// but you need to check. 
-	if (strlen(message) < 5) { 
+	// an empty message (created when they delay submitting a report until after the
+	// cid disappears) is 18 characters long. We expect the message to be closer to 
+	// 1k long so if it's tiny then there is a problem. 
+	if (strlen(message) < 20) { 
 		// the cid expired 
 		log_debug("Empty Message in report_create_from_json_string");
-		free(filterlist->commands);
-		free(filterlist);
-		report_free(report);
-		free(message);
-		return -1;
+		myerr = -1;
+		goto Cleanup;
 	}
 	if (report_sql(report, message) != 1) {
 		//error here
 		log_debug("report_sql returned an error");
-		free(filterlist->commands[0]);
-		free(filterlist->mask);
-		free(filterlist);
-		report_free(report);
-		json_object_put(json_in);
-		json_tokener_free(tok);
-		//free(message);
-		return -1;
+		myerr = -1;
+		goto Cleanup;
 	}
 
-	// free everything up
+	myerr = 1;
+	report_free(report);
+Cleanup:
 	free(filterlist->commands[0]);
 	free(filterlist->mask);
 	free(filterlist);
-	report_free(report);
-	free(message);
 	json_object_put(json_in);
 	json_tokener_free(tok);
-	return 1;
+	free(message);
+	return myerr;
 }
 
 

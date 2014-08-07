@@ -19,6 +19,11 @@
 #define REPORT_H
 
 #include "json-c/json.h"
+#include "main.h"
+#include "mysql/mysql.h"
+#include "mysql/my_global.h"
+#include "string-funcs.h"
+#include "debug.h"
 
 typedef struct jsondata {
 	char *key_arr[150];
@@ -49,7 +54,7 @@ typedef struct reportinfo {
 
 int report_create_from_json_string(char *);
 int report_parse (json_object *, reportinfo *);
-void report_dump (reportinfo *);
+void report_sanitize (reportinfo *, MYSQL *);
 void report_free (reportinfo *);
 int report_sql (reportinfo *, char *);
 int report_create_data_query (char *, char **, char **);

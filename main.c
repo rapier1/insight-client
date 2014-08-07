@@ -24,20 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <websock/websock.h> // websocket lib
-#include <json-c/json.h>
-#include "estats/debug-int.h"
 #include "scripts.h"
 #include "main.h"
-#include "string-funcs.h"
-#include "parse.h"
-#include "report.h"
-#include "geoip.h"
-#include "version.h"
-#include "debug.h"
-#include "uthash.h"
-#include "mysql.h"
-#include "my_global.h"
 
 int debugflag = 0;
 int printjson = 0;
@@ -47,11 +35,11 @@ MMDB_s geoipdb; //define the db handle as a global. possibly bad form but we can
 struct CmdLineCID *cmdlines = NULL;
 
 void get_metric_mask (struct estats_mask *mask, char *maskstring) {
-	const char *defaultmask = ",,,,"; //if not mask passed by client UI use this
-        char *strmask = NULL; // mask string
+	const char *defaultmask = ",,,,,"; //if not mask passed by client UI use this
+	char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
-        uint64_t tmpmask = NULL;
-        const char delim = ',';
+	uint64_t tmpmask = NULL;
+	const char delim = ',';
 	int i = 0;
 	int masklength = 0;
 
@@ -67,25 +55,21 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	} else {
 		strmask = strdup(defaultmask);
 	}
-	
-	printf ("length is %d for strmask of %s\n\n", masklength, strmask);
+
 	// we need to maintain a copy of the pointer of strmask so we can free it
 	// as the ponter is shifted by strsep
 	cp_strmask = strmask;
-	
-	// initialize the mask struct
-        mask->masks[0] = DEFAULT_PERF_MASK;
-        mask->masks[1] = DEFAULT_PATH_MASK;
-        mask->masks[2] = DEFAULT_STACK_MASK;
-        mask->masks[3] = DEFAULT_APP_MASK;
-        mask->masks[4] = DEFAULT_TUNE_MASK;
 
-        for (i = 0; i < MAX_TABLE; i++) {
-                mask->if_mask[i] = 0;
-        }
+	// initialize the mask struct
+	mask->masks[0] = DEFAULT_PERF_MASK;
+	mask->masks[1] = DEFAULT_PATH_MASK;
+	mask->masks[2] = DEFAULT_STACK_MASK;
+	mask->masks[3] = DEFAULT_APP_MASK;
+	mask->masks[4] = DEFAULT_TUNE_MASK;
+	mask->masks[5] = DEFAULT_EXTRAS_MASK;
 
 	// convert the mask string into the mask struct
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < MAX_TABLE; i++) {
 		char *strtmp;
 		strtmp = strsep(&strmask, &delim);
 		if (strtmp && strlen(strtmp)) {
@@ -97,20 +81,21 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 			}
 		}
 	}
+
 	free(cp_strmask); // actually frees strmask
 }
 
 void add_cmdline_to_hash(int cid, char *cmdline) {
-    struct CmdLineCID *s;
+	struct CmdLineCID *s;
 
-    HASH_FIND_INT(cmdlines, &cid, s);
-    if (s == NULL) {
-	    s = (struct CmdLineCID*)malloc(sizeof(struct CmdLineCID));
-	    s->cid = cid;
-	    HASH_ADD_INT(cmdlines, cid, s);
-    }
-    strcpy(s->cmdline, cmdline);
-    return;
+	HASH_FIND_INT(cmdlines, &cid, s);
+	if (s == NULL) {
+		s = (struct CmdLineCID*)malloc(sizeof(struct CmdLineCID));
+		s->cid = cid;
+		HASH_ADD_INT(cmdlines, cid, s);
+	}
+	strcpy(s->cmdline, cmdline);
+	return;
 }
 
 void get_cmdline_from_cid_hash(char** appname, int cid) {
@@ -125,26 +110,26 @@ void get_cmdline_from_cid_hash(char** appname, int cid) {
 }
 
 void delete_all_from_hash() {
-  struct CmdLineCID *current_cmd, *tmp;
+	struct CmdLineCID *current_cmd, *tmp;
 
-  HASH_ITER(hh, cmdlines, current_cmd, tmp) {
-    HASH_DEL(cmdlines, current_cmd);  /* delete it (cmdlines advances to next) */
-    free(current_cmd);            /* free it */
-  }
+	HASH_ITER(hh, cmdlines, current_cmd, tmp) {
+		HASH_DEL(cmdlines, current_cmd);  /* delete it (cmdlines advances to next) */
+		free(current_cmd);            /* free it */
+	}
 }
 
 // taken from web10g logger and expanded upon in order to build a JSON data structure
 void get_connection_data (char **message, struct FilterList *filterlist) {
-        struct estats_error* err = NULL;
-        struct estats_nl_client* cl = NULL;
-        struct estats_connection_list* clist = NULL;
-        struct estats_connection* cp = NULL;
-        struct estats_connection_info* ci;
+	struct estats_error* err = NULL;
+	struct estats_nl_client* cl = NULL;
+	struct estats_connection_list* clist = NULL;
+	struct estats_connection* cp = NULL;
+	struct estats_connection_info* ci;
 	struct estats_connection_tuple_ascii asc;
 	estats_val_data* tcpdata = NULL;
 	char time[20];
 	int sport, dport, i, flag, shownconn = 0;
-        struct estats_mask mask; // mask struct
+	struct estats_mask mask; // mask struct
 	char *maskstring = filterlist->mask;
 	enum RequestTypes request;
 	char *appname = NULL;
@@ -154,18 +139,15 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	get_metric_mask(&mask, maskstring);
 
 	// get a list of the connections available
-        Chk(estats_nl_client_init(&cl));
-        Chk(estats_connection_list_new(&clist));
+	Chk(estats_nl_client_init(&cl));
+	Chk(estats_connection_list_new(&clist));
 	Chk(estats_nl_client_set_mask(cl, &mask));
-        Chk(estats_list_conns(clist, cl));
-	// this call is expensive because the library
-	// compares the pid of the cids to every pid in proc
-	// may want to look at rewriting the library call to use a hash
+	Chk(estats_list_conns(clist, cl));
 	Chk(estats_connection_list_add_info(clist));
 
 	// create the tcpdata struct
 	Chk(estats_val_data_new(&tcpdata));
-	
+
 	// This creates the primary json container
 	json_object * jsonout = json_object_new_object();
 	json_object * data_array = json_object_new_array();
@@ -174,19 +156,30 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	list_for_each(&clist->connection_info_head, ci, list) {
 		add_cmdline_to_hash(ci->cid, ci->cmdline);
 	}
-	
+
 	// step through the list of clients
 	list_for_each(&clist->connection_head, cp, list) {
 		maxconn++; // total number of connections processed including skipped connections
-		
-                struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
+		struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
 
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
-                Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
+		Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
 		Chk2Ign(estats_read_vars(tcpdata, atoi(asc.cid), cl));
 
+		// if we have no data then just skip it
+		if (tcpdata->length==0)
+			continue;
+
+		//We really don't care about connections to localhost
+		if (strcmp(asc.rem_addr, "127.0.0.1") == 0)
+			continue;
+
 		get_cmdline_from_cid_hash(&appname, atoi(asc.cid));
+
+		// we don't want to report on our own connection to the websocket. that's silly.
+		if (strcmp(appname, "insight") == 0)
+			flag = 1;
 
 		// we have to go through this for each connection
 		// as a note. this is a dumb function (it just a big OR) 
@@ -200,18 +193,18 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				flag = exclude_port(sport, dport, filterlist->ports[i], 
-						   filterlist->arrindex[i]);
+						filterlist->arrindex[i]);
 				break;
 			case include:
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				// return 0 *if* the dport or sport is in our list of included ports
 				flag = include_port(sport, dport, filterlist->ports[i], 
-						   filterlist->arrindex[i]);
+						filterlist->arrindex[i]);
 				break;
 			case filterip:
 				flag = filter_ips(asc.local_addr, asc.rem_addr, 
-						 filterlist->strings[i], filterlist->arrindex[i]);
+						filterlist->strings[i], filterlist->arrindex[i]);
 				break;
 			case report:
 				if (filterlist->reportcid != atoi(asc.cid)) 
@@ -219,23 +212,18 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 				break;
 			case appinclude:
 				flag = include_app(appname, filterlist->strings[i], 
-						  filterlist->arrindex[i]);
+						filterlist->arrindex[i]);
 				break;
 			case appexclude:
 				flag = exclude_app(appname, filterlist->strings[i], 
-						  filterlist->arrindex[i]);
+						filterlist->arrindex[i]);
 				break;
 			case list:
 				break;
 			default:
 				break;
 			}
-			
 		}
-		
-		// we don't want to report on our own connection to the websocket. that's silly.
-		if (strcmp(appname, "insight") == 0)
-			flag = 1;
 
 		// if any of the commands creates a flag we skip it. 
 		if (flag) {
@@ -243,10 +231,6 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			flag = 0;
 			continue;
 		}
-		
-		// if we have no data then just skip it
-		if (tcpdata->length==0)
-			continue;
 
 		json_object *connection_data = json_object_new_object(); // main connection array
 		json_object *tuple_data = json_object_new_object(); // holds the tuple data
@@ -257,7 +241,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		json_object *jdestip = json_object_new_string(asc.rem_addr);
 		json_object *jdestport = json_object_new_string(asc.rem_port);
 		json_object *jappname = json_object_new_string(appname);
-		
+
 		// append the tuple data to the tuple data container
 		json_object_object_add (tuple_data, "SrcIP", jsrcip);
 		json_object_object_add (tuple_data, "SrcPort", jsrcport);
@@ -281,10 +265,9 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		double latitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "latitude");
 		double longitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "longitude");
 
-		// printf("%s, lat: %f, long: %f\n", asc.rem_addr, latitude, longitude);
 		json_object *jlat = json_object_new_double(latitude);
 		json_object *jlong = json_object_new_double(longitude);
-	
+
 		json_object_object_add(connection_data, "lat", jlat);
 		json_object_object_add(connection_data, "long", jlong);
 
@@ -322,33 +305,30 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		// add the connection data to the primary container tagged with the connection id
 		json_object_array_add(data_array, connection_data);
 		shownconn++; // how many connections we actually processed the tcpdata of
-Continue:       
+		Continue:
 		while(0) {}
 	}
 	json_object_object_add(jsonout, "DATA", data_array); 
-		
-       	// convert the json object to a string
+
+	// convert the json object to a string
 	*message = malloc(strlen(json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY));
-	
+
 	log_info("%s\n", *message);
 	log_debug("Processed %d of %d connections", shownconn, maxconn);
 	// free the json object from the root node
 	json_object_put(jsonout);
 
 Cleanup:
-        estats_connection_list_free(&clist);
+	estats_connection_list_free(&clist);
 	estats_val_data_free(&tcpdata);
-        estats_nl_client_destroy(&cl);
-
+	estats_nl_client_destroy(&cl);
 	delete_all_from_hash(); // free the command line hash
-
-        if (err != NULL) {
+	if (err != NULL) {
 		PRINT_AND_FREE(err);
-                printf ("EXIT_FAILURE");
-        }
-
-        return;
+		printf ("EXIT_FAILURE");
+	}
+	return;
 }
 
 // figure out what we are doing with the incoming requests
@@ -360,7 +340,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 {
 	// store the data as a char
 	char *request = msg->payload;
-        char *message;
+	char *message;
 	int i, j = 0;
 	json_tokener *tok = json_tokener_new();
 	json_object *json_in = NULL;
@@ -383,7 +363,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		fprintf(stderr, "Inbound JSON Error: %s\n", json_tokener_error_desc(jerr));
 		return NULL;
 	}
-	
+
 	if (tok->char_offset < strlen(request)) // XXX shouldn't access internal fields
 	{
 		// this is when we get characters appended to the end of the json object
@@ -400,7 +380,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	comlist->mask = NULL;
 	comlist->maxindex = 0;
 	parse_json(json_in, comlist);
-	
+
 	if (debugflag) {
 		for (i = 0; i < comlist->maxindex; i++) {
 			log_debug("[%d]command: %s", i, comlist->commands[i]);
@@ -415,9 +395,10 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 			//create a special json string to indicate that there
 			//was an error with the attempt to make a report
 			response = "{\"function\":\"report\", \"result\":\"failure\"}";
+		} else {
+			response = "{\"function\":\"report\", \"result\":\"success\"}";
 		}
-		response = "{\"function\":\"report\", \"result\":\"success\"}";
-	        // send the result back to the client and then cleanup
+		// send the result back to the client and then cleanup
 		libwebsock_send_text_with_length(state, response, strlen(response));
 		// done with comlist so free it up now. 
 		for (i = 0; i < comlist->maxindex; i++) {
@@ -441,7 +422,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	}
 	free(comlist->mask);
 	free(comlist);
-	
+
 	// print out what we have for debug purposes
 	if (debugflag) {
 		log_debug ("INBOUND COMMANDS");
@@ -485,10 +466,10 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	get_connection_data(&message, filterlist); 
 
 	log_debug("message length: %d",(int)strlen(message)); 
-	
+
 	// now we send it to the socket 
 	libwebsock_send_text_with_length(state, message, strlen(message));
-	
+
 	// free up the filterlist struct we use a case statement here
 	// because not everything is malloc'd and we don't want a bad free
 	for (i = 0; i < filterlist->maxindex; i++) {
@@ -517,7 +498,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	free(filterlist);
 	free(message); // free the json string
 
-Cleanup:
+	Cleanup:
 	// free the inbound jason object and token
 	json_object_put(json_in);
 	json_tokener_free(tok);
@@ -576,35 +557,35 @@ int main(int argc, char *argv[])
 	int opt;
 	mysql_library_init(0, NULL, NULL);
 
-        while ((opt = getopt(argc, argv, "hp:g:dj")) != -1) {
-                switch (opt) {
-                case 'h':
-                        usage();
-                        exit(EXIT_SUCCESS);
-                        break;
-                case 'p':
+	while ((opt = getopt(argc, argv, "hp:g:dj")) != -1) {
+		switch (opt) {
+		case 'h':
+			usage();
+			exit(EXIT_SUCCESS);
+			break;
+		case 'p':
 			port = optarg;
-                        break;
-                case 'g':
-                        geoippath = optarg;
-                        break;
+			break;
+		case 'g':
+			geoippath = optarg;
+			break;
 		case 'd':
 			debugflag = 1;
 			break;
 		case 'j':
 			printjson = 1;
 			break;
-                default:
+		default:
 			usage();
-                        exit(EXIT_FAILURE);
-                        break;
-                }
-        }
+			exit(EXIT_FAILURE);
+			break;
+		}
+	}
 
 	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &geoipdb);
 	if (MMDB_SUCCESS != status) {
-	  printf("Can't open db\n");
-	  return 0;
+		fprintf(stderr, "Can't open db\n");
+		return 0;
 	}
 
 	printf ("geoIP database opened and ready\n");

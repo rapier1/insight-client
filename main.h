@@ -17,10 +17,19 @@
 
 #ifndef MAIN_H
 #define MAIN_H
+#define _GNU_SOURCE 1
+#include <json-c/json.h>
 #include <websock/websock.h> // websocket lib
 #include "estats/estats.h"
 #include "uthash.h"
 #include "parse.h"
+#include "string-funcs.h"
+#include "report.h"
+#include "geoip.h"
+#include "version.h"
+#include "debug.h"
+#include "mysql/mysql.h"
+#include "mysql/my_global.h"
 
 void get_metric_mask (struct estats_mask *, char *);
 void add_cmdline_to_hash(int, char *);
@@ -37,4 +46,5 @@ typedef struct CmdLineCID {
 	char cmdline[256];
 	UT_hash_handle hh;
 } CmdLineCID;
+
 #endif
