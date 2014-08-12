@@ -18,7 +18,12 @@
 #ifndef MAIN_H
 #define MAIN_H
 #define _GNU_SOURCE 1
+#include "config.h"
+#ifdef HAVE_LIBJSONC
 #include <json-c/json.h>
+#else
+#include <libjson.h>
+#endif
 #include <websock/websock.h> // websocket lib
 #include "estats/estats.h"
 #include "uthash.h"

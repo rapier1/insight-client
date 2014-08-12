@@ -81,7 +81,6 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 			}
 		}
 	}
-
 	free(cp_strmask); // actually frees strmask
 }
 
@@ -139,11 +138,11 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	get_metric_mask(&mask, maskstring);
 
 	// get a list of the connections available
-	Chk(estats_nl_client_init(&cl));
-	Chk(estats_connection_list_new(&clist));
-	Chk(estats_nl_client_set_mask(cl, &mask));
-	Chk(estats_list_conns(clist, cl));
-	Chk(estats_connection_list_add_info(clist));
+	Chk(estats_nl_client_init(&cl)); //init the netlink client
+	Chk(estats_connection_list_new(&clist)); //create a new connection list
+	Chk(estats_nl_client_set_mask(cl, &mask)); //set the metric mask
+	Chk(estats_list_conns(clist, cl)); // fill the connection list with cid data
+	Chk(estats_connection_list_add_info(clist)); //add the application, pid, name data
 
 	// create the tcpdata struct
 	Chk(estats_val_data_new(&tcpdata));
@@ -311,6 +310,8 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	json_object_object_add(jsonout, "DATA", data_array); 
 
 	// convert the json object to a string
+	// we use JSON_C_TO_STRING_PRETTY becaus the data may be sent to stdout
+	// and the UI doesn't care
 	*message = malloc(strlen(json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY)+1) * sizeof(*message));
 	strcpy(*message, (char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY));
 
@@ -399,7 +400,8 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 			response = "{\"function\":\"report\", \"result\":\"success\"}";
 		}
 		// send the result back to the client and then cleanup
-		libwebsock_send_text_with_length(state, response, strlen(response));
+		if (libwebsock_send_text_with_length(state, response, strlen(response)) != 0)
+			printf("Failure to send report response to user interface\n");
 		// done with comlist so free it up now. 
 		for (i = 0; i < comlist->maxindex; i++) {
 			free(comlist->commands[i]);
@@ -468,7 +470,8 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	log_debug("message length: %d",(int)strlen(message)); 
 
 	// now we send it to the socket 
-	libwebsock_send_text_with_length(state, message, strlen(message));
+	if (libwebsock_send_text_with_length(state, message, strlen(message)) != 0)
+		printf ("Failure in sending data to user interface.\n");
 
 	// free up the filterlist struct we use a case statement here
 	// because not everything is malloc'd and we don't want a bad free

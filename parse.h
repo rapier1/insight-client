@@ -17,6 +17,12 @@
 
 #ifndef PARSE_H
 #define PARSE_H
+#include "config.h"
+#ifdef HAVE_LIBJSONC
+#include <json-c/json.h>
+#else
+#include <libjson.h>
+#endif
 
 typedef enum RequestTypes {
 	list,

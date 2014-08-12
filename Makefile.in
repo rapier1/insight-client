@@ -259,8 +259,10 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CFLAGS = -g -Wall -I/usr/include/mysql
-AM_LDFLAGS = -L/usr/lib64/mysql -lestats -ljson-c -lwebsock -lmaxminddb -lmysqlclient
+@LINK_LIBJSONC_TRUE@USE_LIBJSON = -ljson-c
+@LINK_LIBJSON_TRUE@USE_LIBJSON = -llibjson
+AM_CFLAGS = -g -O3 -Wall -I/usr/include/mysql -std=gnu99 -fgnu89-inline
+AM_LDFLAGS = -L/usr/lib64/mysql -lestats -lwebsock -lmaxminddb -lmysqlclient $(USE_LIBJSON)
 insight_SOURCES = main.c parse.c report.c string-funcs.c geoip.c debug.c \
                  parse.h scripts.h main.h string-funcs.h report.h geoip.h \
 		 debug.h uthash.h version.h

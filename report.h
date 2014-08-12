@@ -18,7 +18,12 @@
 #ifndef REPORT_H
 #define REPORT_H
 
-#include "json-c/json.h"
+#include "config.h"
+#ifdef HAVE_LIBJSONC
+#include <json-c/json.h>
+#else
+#include <libjson.h>
+#endif
 #include "main.h"
 #include "mysql/mysql.h"
 #include "mysql/my_global.h"

@@ -14,7 +14,7 @@
  * if not, see http://opensource.org/licenses/MIT.
  *
  */
-#include <json-c/json.h>
+
 #include <stdio.h>
 #include <string.h>
 #include "report.h"

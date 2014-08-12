@@ -25,11 +25,20 @@ AC_CHECK_LIB([mysqlclient], [mysql_init], [], [
 AC_CHECK_LIB([websock], [libwebsock_init], [], [
 	echo "Websocket library (websock) is missing."
 	exit -1])
-AC_CHECK_LIB([json-c], [json_tokener_parse_ex], [], [
-	echo "JSON-C library (json-c) is missing."
+AC_CHECK_LIB([pthread], [pthread_create], [], [
+	echo "Pthreads library is missing"
 	exit -1])
+AC_SEARCH_LIBS([json_tokener_parse_ex], [json-c libjson], [], [
+	echo "JSON-C (fedoa) and/or LibJson (debian) library ) is missing."
+	exit -1])
+AC_CHECK_LIB([json-c], [json_tokener_parse_ex], [LIBJSONC=true], [], [])
+AM_CONDITIONAL([LINK_LIBJSONC], [test x$LIBJSONC = xtrue])
+AC_CHECK_LIB([libjson], [json_tokener_parse_ex], [LIBJSON=true], [], [])
+AM_CONDITIONAL([LINK_LIBJSON], [test x$LIBJSON = xtrue])
 
-
+if test "$LIBJSONC" = "true"; then
+        AC_DEFINE([HAVE_LIBJSONC], 1, [Define to 1 if json-c is present])
+fi
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h inttypes.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h unistd.h])

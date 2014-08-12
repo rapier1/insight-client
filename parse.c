@@ -25,7 +25,6 @@
 #include <string.h>
 #include "scripts.h"
 #include "string-funcs.h"
-#include <json-c/json.h>
 #include "parse.h"
 #include "debug.h"
 
