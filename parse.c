@@ -35,9 +35,7 @@ extern int debugflag;
 int include_port (int sport, int dport, int ports[], int index) {
 	int i;
 	for (i = 0; i < index; i++) {
-		if (sport == ports[i])
-			return 0;
-		if (dport == ports[i]) 
+		if (sport == ports[i] || dport == ports[i]) 
 			return 0;
 	}
 	return 1;
@@ -58,8 +56,8 @@ int exclude_port (int sport, int dport, int ports[], int index) {
 int filter_ips( char* local, char* remote, char** ips, int index) {
 	int i;
 	for (i = 0; i < index; i++) {
-		if (strcmp(local, ips[i]) == 0 ||
-		    strcmp(remote, ips[i]) == 0)
+		if (inet_addr(local) == inet_addr(ips[i]) ||
+		    inet_addr(remote) == inet_addr(ips[i]))
 			return 0;
 	}
 	return 1;
@@ -86,8 +84,6 @@ int include_app (char* appname, char** apps, int index) {
 	}
 	return 1;
 }
-
-
 
 
 void parse_json_array( json_object *jobj, char *key, struct CommandList *comlist) {

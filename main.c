@@ -32,10 +32,9 @@ int printjson = 0;
 
 MMDB_s geoipdb; //define the db handle as a global. possibly bad form but we can revist
 
-struct CmdLineCID *cmdlines = NULL;
 
 void get_metric_mask (struct estats_mask *mask, char *maskstring) {
-	const char *defaultmask = ",,,,,"; //if not mask passed by client UI use this
+	const char *defaultmask = ",,,,,"; //if not mask passed by UI use this
 	char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
 	uint64_t tmpmask = NULL;
@@ -84,22 +83,22 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	free(cp_strmask); // actually frees strmask
 }
 
-void add_cmdline_to_hash(int cid, char *cmdline) {
+void add_cmdline_to_hash(int cid, char *cmdline, CmdLineCID **cmdlines) {
 	struct CmdLineCID *s;
 
-	HASH_FIND_INT(cmdlines, &cid, s);
+	HASH_FIND_INT(*cmdlines, &cid, s);
 	if (s == NULL) {
 		s = (struct CmdLineCID*)malloc(sizeof(struct CmdLineCID));
 		s->cid = cid;
-		HASH_ADD_INT(cmdlines, cid, s);
+		HASH_ADD_INT(*cmdlines, cid, s);
 	}
 	strcpy(s->cmdline, cmdline);
 	return;
 }
 
-void get_cmdline_from_cid_hash(char** appname, int cid) {
+void get_cmdline_from_cid_hash(char** appname, int cid, CmdLineCID **cmdlines) {
 	struct CmdLineCID *s;
-	HASH_FIND_INT(cmdlines, &cid, s);
+	HASH_FIND_INT(*cmdlines, &cid, s);
 	if (s != NULL) {
 		*appname = strdup(s->cmdline);
 	} else {
@@ -108,11 +107,11 @@ void get_cmdline_from_cid_hash(char** appname, int cid) {
 	return;
 }
 
-void delete_all_from_hash() {
+void delete_all_from_hash(CmdLineCID **cmdlines) {
 	struct CmdLineCID *current_cmd, *tmp;
 
-	HASH_ITER(hh, cmdlines, current_cmd, tmp) {
-		HASH_DEL(cmdlines, current_cmd);  /* delete it (cmdlines advances to next) */
+	HASH_ITER(hh, *cmdlines, current_cmd, tmp) {
+		HASH_DEL(*cmdlines, current_cmd);  /* delete it (cmdlines advances to next) */
 		free(current_cmd);            /* free it */
 	}
 }
@@ -125,6 +124,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	struct estats_connection* cp = NULL;
 	struct estats_connection_info* ci;
 	struct estats_connection_tuple_ascii asc;
+	struct CmdLineCID *cmdlines = NULL;
 	estats_val_data* tcpdata = NULL;
 	char time[20];
 	int sport, dport, i, flag, shownconn = 0;
@@ -153,7 +153,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 
 	// build a hash of the cmdlines and cids
 	list_for_each(&clist->connection_info_head, ci, list) {
-		add_cmdline_to_hash(ci->cid, ci->cmdline);
+		add_cmdline_to_hash(ci->cid, ci->cmdline, &cmdlines);
 	}
 
 	// step through the list of clients
@@ -174,7 +174,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		if (strcmp(asc.rem_addr, "127.0.0.1") == 0)
 			continue;
 
-		get_cmdline_from_cid_hash(&appname, atoi(asc.cid));
+		get_cmdline_from_cid_hash(&appname, atoi(asc.cid), &cmdlines);
 
 		// we don't want to report on our own connection to the websocket. that's silly.
 		if (strcmp(appname, "insight") == 0)
@@ -324,7 +324,7 @@ Cleanup:
 	estats_connection_list_free(&clist);
 	estats_val_data_free(&tcpdata);
 	estats_nl_client_destroy(&cl);
-	delete_all_from_hash(); // free the command line hash
+	delete_all_from_hash(&cmdlines); // free the command line hash
 	if (err != NULL) {
 		PRINT_AND_FREE(err);
 		printf ("EXIT_FAILURE");
@@ -587,7 +587,7 @@ int main(int argc, char *argv[])
 
 	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &geoipdb);
 	if (MMDB_SUCCESS != status) {
-		fprintf(stderr, "Can't open db\n");
+		fprintf(stderr, "Can't open geoIP database\n");
 		return 0;
 	}
 

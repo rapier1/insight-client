@@ -36,20 +36,20 @@
 #include "mysql/mysql.h"
 #include "mysql/my_global.h"
 
-void get_metric_mask (struct estats_mask *, char *);
-void add_cmdline_to_hash(int, char *);
-void get_cmdline_from_cid_hash(char ** , int);
-void delete_all_from_hash();
-void get_connection_data (char **, struct FilterList *);
-void *analyze_inbound(libwebsock_client_state *, libwebsock_message *);
-int onmessage(libwebsock_client_state *, libwebsock_message *);
-int onopen(libwebsock_client_state *);
-int onclose(libwebsock_client_state *);
-
 typedef struct CmdLineCID {
 	int cid;
 	char cmdline[256];
 	UT_hash_handle hh;
 } CmdLineCID;
+
+void get_metric_mask (struct estats_mask *, char *);
+void add_cmdline_to_hash(int, char *, CmdLineCID **);
+void get_cmdline_from_cid_hash(char ** , int, CmdLineCID **);
+void delete_all_from_hash(CmdLineCID **);
+void get_connection_data (char **, struct FilterList *);
+void *analyze_inbound(libwebsock_client_state *, libwebsock_message *);
+int onmessage(libwebsock_client_state *, libwebsock_message *);
+int onopen(libwebsock_client_state *);
+int onclose(libwebsock_client_state *);
 
 #endif
