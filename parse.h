@@ -21,8 +21,11 @@
 #ifdef HAVE_LIBJSONC
 #include <json-c/json.h>
 #else
-#include <libjson.h>
+#include <json/json.h>
 #endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 typedef enum RequestTypes {
 	list,

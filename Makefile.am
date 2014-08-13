@@ -1,5 +1,5 @@
 if LINK_LIBJSON
-  USE_LIBJSON=-llibjson
+  USE_LIBJSON=-ljson
 endif
 if LINK_LIBJSONC
   USE_LIBJSON=-ljson-c

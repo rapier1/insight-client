@@ -28,12 +28,12 @@ AC_CHECK_LIB([websock], [libwebsock_init], [], [
 AC_CHECK_LIB([pthread], [pthread_create], [], [
 	echo "Pthreads library is missing"
 	exit -1])
-AC_SEARCH_LIBS([json_tokener_parse_ex], [json-c libjson], [], [
+AC_SEARCH_LIBS([json_tokener_parse_ex], [json-c json], [], [
 	echo "JSON-C (fedoa) and/or LibJson (debian) library ) is missing."
 	exit -1])
 AC_CHECK_LIB([json-c], [json_tokener_parse_ex], [LIBJSONC=true], [], [])
 AM_CONDITIONAL([LINK_LIBJSONC], [test x$LIBJSONC = xtrue])
-AC_CHECK_LIB([libjson], [json_tokener_parse_ex], [LIBJSON=true], [], [])
+AC_CHECK_LIB([json], [json_tokener_parse_ex], [LIBJSON=true], [], [])
 AM_CONDITIONAL([LINK_LIBJSON], [test x$LIBJSON = xtrue])
 
 if test "$LIBJSONC" = "true"; then

@@ -37,7 +37,7 @@ void get_metric_mask (struct estats_mask *mask, char *maskstring) {
 	const char *defaultmask = ",,,,,"; //if not mask passed by UI use this
 	char *strmask = NULL; // mask string
 	char *cp_strmask = NULL; // copy of mask string
-	uint64_t tmpmask = NULL;
+	uint64_t tmpmask;
 	const char delim = ',';
 	int i = 0;
 	int masklength = 0;

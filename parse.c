@@ -51,14 +51,99 @@ int exclude_port (int sport, int dport, int ports[], int index) {
 	return 0;
 }
 
-// only report on IPs passed to us. This does a string comparison
-// we can later expand this to do filtering on CIDR blocks and the like. 
+
+/* only report on the ipaddresses that are passed to the client
+ * Originally this was a simple string compare but that has serious issues
+ * so we use getaddrinfo to get the information about each of the addresses
+ * we are testing (local, remote, and the user defined ips). We use the ai_family
+ * data to determine if it is ipv4 or ipv6. We then cast the getaddrinfo
+ * address to the appropriate sockaddr_in struct. For ipv4 we can directly compare
+ * the ints found in sin_addr.s_addr. If it's ipv6 then we do a memcmp because the
+ * struct for sin6_addr.s6_addr is a char[16]. If they match we return 0 (which 
+ * doesn't set the skip flag) if they don't we return a 1. 
+ */
 int filter_ips( char* local, char* remote, char** ips, int index) {
-	int i;
+	int i, ret;
+	struct addrinfo hint;
+	struct addrinfo *locres = 0;
+	struct addrinfo *remres = 0; 
+	struct addrinfo *testres = 0;
+	struct sockaddr_in *locaddr = NULL;
+	struct sockaddr_in *remaddr = NULL;
+	struct sockaddr_in *testaddr = NULL;
+	struct sockaddr_in6 *locaddr6 = NULL;
+	struct sockaddr_in6 *remaddr6 = NULL;
+	struct sockaddr_in6 *testaddr6 = NULL;
+	
+	memset(&hint, '\0', sizeof hint);
+	
+	hint.ai_family = AF_UNSPEC;
+	hint.ai_flags = AI_NUMERICHOST; //no dns lookups!
+
+	/* get the info for the remote ip address.*/
+	ret = getaddrinfo(remote, NULL, &hint, &remres);
+	if (ret != 0){
+		// we shoudln't see a bad address here but we shoudl check anyway
+		fprintf(stderr, "getaddrinfo: %s (likely an invalid remote ip address)\n", 
+			gai_strerror(ret));
+		return 1;
+	}
+
+	// cast the address information to the appropriate struct
+	if (remres->ai_family == AF_INET)  
+		remaddr = (struct sockaddr_in*)remres->ai_addr;
+	else 
+		remaddr6 = (struct sockaddr_in6*)remres->ai_addr;
+
+	// same as above but for the local ip address
+	ret = getaddrinfo(local, NULL, &hint, &locres);
+	if (ret != 0) {
+		fprintf(stderr, "getaddrinfo: %s (likely an invalid local ip address)\n", 
+			gai_strerror(ret));
+		return 1;
+	}
+	if (locres->ai_family == AF_INET)  
+		locaddr = (struct sockaddr_in*)locres->ai_addr;
+	else 
+		locaddr6 = (struct sockaddr_in6*)locres->ai_addr;
+
 	for (i = 0; i < index; i++) {
-		if (inet_addr(local) == inet_addr(ips[i]) ||
-		    inet_addr(remote) == inet_addr(ips[i]))
-			return 0;
+		// go through the above for each ip address we are testing against
+		ret = getaddrinfo(ips[i], NULL, &hint, &testres);
+		if (ret != 0) {
+			fprintf(stderr, "getaddrinfo: %s (likely an invalid user defined ip address)\n", 
+				gai_strerror(ret));
+			return 1;
+		}
+		if (testres->ai_family == AF_INET)  
+			testaddr = (struct sockaddr_in*)testres->ai_addr;
+		else 
+			testaddr6 = (struct sockaddr_in6*)testres->ai_addr;
+
+		
+		// do the families match? If not just skip it
+		if (locres->ai_family == testres->ai_family) {
+			// compare on either ipv4 (AF_INET) or ipv6
+			if (locres->ai_family == AF_INET) {
+				if (locaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr)
+					return 0;
+			} else {
+				if (memcmp(locaddr6->sin6_addr.s6_addr, testaddr6->sin6_addr.s6_addr, 
+					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) 
+					return 0;
+			}
+		}
+
+		if (remres->ai_family == testres->ai_family) {
+			if (remres->ai_family == AF_INET) {
+				if (remaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr)
+					return 0;
+			} else {
+				if (memcmp(remaddr6->sin6_addr.s6_addr, testaddr6->sin6_addr.s6_addr, 
+					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) 
+					return 0;
+			}
+		}
 	}
 	return 1;
 }
@@ -222,6 +307,7 @@ int parse_strings(struct FilterList *filterlist, char *inbound, int loc) {
 	if ( split == NULL ) {
 		// We didn't find the delimiter between the command and list of options
 		// which is obviously odd but lets accept it for now
+		printf ("foo\n");
 		return 0;
 	}
 	log_debug("parse_strings split value: %d", mynum);
