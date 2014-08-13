@@ -556,7 +556,7 @@ int main(int argc, char *argv[])
 {
 	libwebsock_context *wssocket = NULL;
 	char* port = "9000";
-	char* geoippath = "/home/rapier/websockets/test/GeoLite2-City.mmdb";
+	char* geoippath = "/usr/local/share/GeoIP/GeoLite2-City.mmdb";
 	int opt;
 	mysql_library_init(0, NULL, NULL);
 

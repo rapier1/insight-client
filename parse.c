@@ -79,12 +79,11 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	memset(&hint, '\0', sizeof hint);
 	
 	hint.ai_family = AF_UNSPEC;
-	//hint.ai_flags = AI_NUMERICHOST; //no dns lookups!
 
 	/* get the info for the remote ip address.*/
 	ret = getaddrinfo(remote, NULL, &hint, &remres);
 	if (ret != 0){
-		// we shoudln't see a bad address here but we shoudl check anyway
+		// we shoudln't see a bad address here but we should check anyway
 		fprintf(stderr, "getaddrinfo: %s (likely an invalid remote ip address)\n", 
 			gai_strerror(ret));
 		free(remres);
