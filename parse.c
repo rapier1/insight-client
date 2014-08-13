@@ -64,6 +64,7 @@ int exclude_port (int sport, int dport, int ports[], int index) {
  */
 int filter_ips( char* local, char* remote, char** ips, int index) {
 	int i, ret;
+	int result = 1;
 	struct addrinfo hint;
 	struct addrinfo *locres = 0;
 	struct addrinfo *remres = 0; 
@@ -78,7 +79,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	memset(&hint, '\0', sizeof hint);
 	
 	hint.ai_family = AF_UNSPEC;
-	hint.ai_flags = AI_NUMERICHOST; //no dns lookups!
+	//hint.ai_flags = AI_NUMERICHOST; //no dns lookups!
 
 	/* get the info for the remote ip address.*/
 	ret = getaddrinfo(remote, NULL, &hint, &remres);
@@ -86,6 +87,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		// we shoudln't see a bad address here but we shoudl check anyway
 		fprintf(stderr, "getaddrinfo: %s (likely an invalid remote ip address)\n", 
 			gai_strerror(ret));
+		free(remres);
 		return 1;
 	}
 
@@ -100,6 +102,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	if (ret != 0) {
 		fprintf(stderr, "getaddrinfo: %s (likely an invalid local ip address)\n", 
 			gai_strerror(ret));
+		freeaddrinfo(remres);
+		freeaddrinfo(locres);
 		return 1;
 	}
 	if (locres->ai_family == AF_INET)  
@@ -113,7 +117,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		if (ret != 0) {
 			fprintf(stderr, "getaddrinfo: %s (likely an invalid user defined ip address)\n", 
 				gai_strerror(ret));
-			return 1;
+			freeaddrinfo(testres);
+			goto Cleanup;
 		}
 		if (testres->ai_family == AF_INET)  
 			testaddr = (struct sockaddr_in*)testres->ai_addr;
@@ -125,27 +130,44 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		if (locres->ai_family == testres->ai_family) {
 			// compare on either ipv4 (AF_INET) or ipv6
 			if (locres->ai_family == AF_INET) {
-				if (locaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr)
-					return 0;
+				if (locaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr){
+					result = 0;
+					freeaddrinfo(testres);
+					goto Cleanup;
+				}
 			} else {
 				if (memcmp(locaddr6->sin6_addr.s6_addr, testaddr6->sin6_addr.s6_addr, 
-					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) 
-					return 0;
+					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) {
+					result = 0;
+					freeaddrinfo(testres);
+					goto Cleanup;
+				}
+
 			}
 		}
 
 		if (remres->ai_family == testres->ai_family) {
 			if (remres->ai_family == AF_INET) {
-				if (remaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr)
-					return 0;
+				if (remaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr){
+					result = 0;
+					freeaddrinfo(testres);
+					goto Cleanup;
+				}
 			} else {
 				if (memcmp(remaddr6->sin6_addr.s6_addr, testaddr6->sin6_addr.s6_addr, 
-					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) 
-					return 0;
+					   sizeof(testaddr6->sin6_addr.s6_addr)) == 0) {
+					result = 0;
+					freeaddrinfo(testres);
+					goto Cleanup;
+				}
 			}
 		}
+		freeaddrinfo(testres);
 	}
-	return 1;
+Cleanup:
+	freeaddrinfo(remres);
+	freeaddrinfo(locres);
+	return result;
 }
 
 // if the application name is found in the list of excluded apps
