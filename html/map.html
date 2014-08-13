@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<link rel="stylesheet" type="text/css" href="insight.css">
+
+</head>
+<body>
+
+  <div id="modal" class="hidden">
+    <div id="modal-content"></div>
+  </div>
+  <div id="contact-info-form" class="hidden"><h2>Contact Information</h2>
+    <label>First Name:<input type="text" id="fname"></label><br>
+    <label>Last Name:<input type="text" id="lname"></label><br>
+    <label>Email:<input type="email" id="email"></label><br>
+    <label>Institution:<input type="text" id="institution"></label><br>
+    <label>Phone:<input type="tel" id="phone"></label><br>
+    <input type="button" value="Submit" onclick="ctrl.view.submitContactForm()">
+    <input type="button" value="Clear" onclick="ctrl.view.clearContactInfo()">
+  </div>
+
+  <div id="container">
+    <h1>Insight</h1>
+    <div id="map-canvas"></div>
+    <div id="info-canvas">
+      <div id="con-stat" class="info"></div>
+      <div id="filter-field" class="info">
+        <h2>Filter Options</h2>
+
+        <input type="checkbox" id="filter-exclude" value="exclude" checked />Exclude Ports:
+        <input type="text" id="exclude-list" value="80, 8080"><br>
+
+        <input type="checkbox" id="filter-include" value="include" />Include Ports:
+        <input type="text" id="include-list"><br>
+
+        <input type="checkbox" id="filter-filterip" value="filterip" />Include IPs:
+        <input type="text" id="filterip-list"><br>
+
+      </div>
+      <div id="contact-info" class="info"><h2>Contact Information</h2>
+        <label>First Name:<input type="text" id="usr-fname" readonly="true"></label><br>
+        <label>Last Name:<input type="text" id="usr-lname" readonly="true"></label><br>
+        <label>Email:<input type="email" id="usr-email" readonly="true"></label><br>
+        <label>Institution:<input type="text" id="usr-institution" readonly="true"></label><br>
+        <label>Phone:<input type="tel" id="usr-phone" readonly="true"></label><br>
+        <input type="button" value="Edit" onclick="ctrl.view.editContactInfo()">
+        <input type="button" value="Send Report" style="align-right" onclick="ctrl.view.report()">
+      </div>
+      <div id="con-field" class="info">
+        <h2>Connection Details</h2>
+      </div>
+    </div>
+  </div>
+
+  <div id="legend"></div>
+
+  <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.9&key=AIzaSyD2jW_4oXbWtCbXZ7L5wLdBoAtL6tAf8Fg&sensor=false"></script>
+  <script type="text/javascript" src="jquery-1.11.1.min.js"></script>
+  <script type="text/javascript" src="curved.line-0.0.2.js"></script>
+  <script type="text/javascript" src="insight.js"></script>
+</body>
+</html>
