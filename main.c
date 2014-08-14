@@ -170,18 +170,21 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		if (tcpdata->length==0)
 			continue;
 
-		//We really don't care about connections to localhost
+		// We really don't care about connections to localhost
+		// TODO this should be turned into the entire 127/8 block
 		if (strcmp(asc.rem_addr, "127.0.0.1") == 0)
 			continue;
 
 		get_cmdline_from_cid_hash(&appname, atoi(asc.cid), &cmdlines);
 
 		// we don't want to report on our own connection to the websocket. that's silly.
-		if (strcmp(appname, "insight") == 0)
-			flag = 1;
+		if (strcmp(appname, "insight") == 0) {
+			free(appname);
+			continue;
+		}
 
 		// we have to go through this for each connection
-		// as a note. this is a dumb function (it just a big OR) 
+		// as a note. This really end up being just a great big OR statement
 		// so conflicting commands will result in no data or all the data
 		// it's up to the user and/or ui to make smart choices.
 		for (i = 0; i < filterlist->maxindex; i++) {
@@ -222,13 +225,11 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			default:
 				break;
 			}
-		}
-
-		// if any of the commands creates a flag we skip it. 
-		if (flag) {
-			free(appname);
-			flag = 0;
-			continue;
+			if (flag) {
+				free(appname);
+				flag = 0;
+				goto Continue;
+			}
 		}
 
 		json_object *connection_data = json_object_new_object(); // main connection array
@@ -327,7 +328,6 @@ Cleanup:
 	delete_all_from_hash(&cmdlines); // free the command line hash
 	if (err != NULL) {
 		PRINT_AND_FREE(err);
-		printf ("EXIT_FAILURE");
 	}
 	return;
 }
@@ -365,7 +365,7 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		return NULL;
 	}
 
-	if (tok->char_offset < strlen(request)) // XXX shouldn't access internal fields
+	if (tok->char_offset < strlen(request)) // shouldn't access internal fields
 	{
 		// this is when we get characters appended to the end of the json object
 		// since this shouldn't be sent from the UI we'll just return null and wait for 
@@ -530,7 +530,7 @@ onmessage(libwebsock_client_state *state, libwebsock_message *msg)
 		break;
 	}
 	default:
-		fprintf(stderr, "Unknown opcode: %d\n", msg->opcode);
+		//fprintf(stderr, "Unknown inbound request (Non-text input): %d\n", msg->opcode);
 		break;
 	}
 	return 0;
@@ -540,7 +540,7 @@ onmessage(libwebsock_client_state *state, libwebsock_message *msg)
 int
 onopen(libwebsock_client_state *state)
 {
-	fprintf(stderr, "onopen: %d\n", state->sockfd);
+	fprintf(stderr, "Incoming connection: %d\n", state->sockfd);
 	return 0;
 }
 
@@ -548,7 +548,7 @@ onopen(libwebsock_client_state *state)
 int
 onclose(libwebsock_client_state *state)
 {
-	fprintf(stderr, "onclose: %d\n", state->sockfd);
+	fprintf(stderr, "Closed connection: %d\n", state->sockfd);
 	return 0;
 }
 
@@ -585,6 +585,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	// init and bind the websock client
+	wssocket = libwebsock_init();
+	if (wssocket == NULL ) {
+		fprintf(stderr, "Error during libwebsock_init.\n");
+		exit(1);
+	}
+	libwebsock_bind(wssocket, "127.0.0.1", port);
+	fprintf(stderr, "Insight listening on port %s\n", port);
+
+	// initialize the geoip database
 	int status = MMDB_open(geoippath, MMDB_MODE_MMAP, &geoipdb);
 	if (MMDB_SUCCESS != status) {
 		fprintf(stderr, "Can't open geoIP database\n");
@@ -593,19 +603,15 @@ int main(int argc, char *argv[])
 
 	printf ("geoIP database opened and ready\n");
 
-	wssocket = libwebsock_init();
-	if (wssocket == NULL ) {
-		fprintf(stderr, "Error during libwebsock_init.\n");
-		exit(1);
-	}
-	libwebsock_bind(wssocket, "127.0.0.1", port);
-	fprintf(stderr, "libwebsock listening on port %s\n", port);
-	wssocket->onmessage = onmessage;
-	wssocket->onopen = onopen;
-	wssocket->onclose = onclose;
-	libwebsock_wait(wssocket);
+	// define the callbacks: what we do when we have to do something
+	wssocket->onmessage = onmessage; // for each incoming message 
+	wssocket->onopen = onopen; // this is for any connecting thread
+	wssocket->onclose = onclose; // shut it down. shut it all down. 
+
+	libwebsock_wait(wssocket); // And now we wait. Like a tick. 
+
 	//perform any cleanup here.
-	fprintf(stderr, "Exiting.\n");
+	fprintf(stderr, "Exiting Insight.\n");
 	MMDB_close(&geoipdb);
 	mysql_library_end();
 	return 0;

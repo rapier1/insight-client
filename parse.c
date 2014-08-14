@@ -51,6 +51,16 @@ int exclude_port (int sport, int dport, int ports[], int index) {
 	return 0;
 }
 
+// Take the incoming ints and or them. Then and them against a 
+// mask we create based on the number of bits in the mask. This was taken from 
+// addr4_ match in the linux kernel (include/net/xfrm.h)
+bool cidr_match(int addr, int net, uint8_t bits) {
+	// if bits is 0 then it will always match
+	if (bits == 0) {
+		return true;
+	}
+	return !((addr ^ net) & htonl(0xFFFFFFFFu << (32 - bits)));
+}
 
 /* only report on the ipaddresses that are passed to the client
  * Originally this was a simple string compare but that has serious issues
@@ -61,9 +71,15 @@ int exclude_port (int sport, int dport, int ports[], int index) {
  * the ints found in sin_addr.s_addr. If it's ipv6 then we do a memcmp because the
  * struct for sin6_addr.s6_addr is a char[16]. If they match we return 0 (which 
  * doesn't set the skip flag) if they don't we return a 1. 
+ * New: we can now use CIDR masks for IPV4. I haven't gone to ip6 yet as that's
+ * a pain on the UI side. 
+ */
+/* worth mentioning. This returns 0 if the ip address in the cid matches our filter.
+ * why? Because the flag the result is returned to squelches any CID that has a 1.
+ * so some filters return 1 and some return 0 depending on what we want to squelch
  */
 int filter_ips( char* local, char* remote, char** ips, int index) {
-	int i, ret;
+	int i, ret, j = 0;
 	int result = 1;
 	struct addrinfo hint;
 	struct addrinfo *locres = 0;
@@ -75,6 +91,13 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	struct sockaddr_in6 *locaddr6 = NULL;
 	struct sockaddr_in6 *remaddr6 = NULL;
 	struct sockaddr_in6 *testaddr6 = NULL;
+	char *ip[2];
+	char *token;
+	char *tmpip;
+	int bits;
+
+	ip[0] = malloc(100); // ipaddress oversized because maybe we do ipv6 at some point? 
+	ip[1] = malloc(20); // mask
 	
 	memset(&hint, '\0', sizeof hint);
 	
@@ -83,7 +106,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	/* get the info for the remote ip address.*/
 	ret = getaddrinfo(remote, NULL, &hint, &remres);
 	if (ret != 0){
-		// we shoudln't see a bad address here but we should check anyway
+		// we shouldn't see a bad address here but we should check anyway
 		fprintf(stderr, "getaddrinfo: %s (likely an invalid remote ip address)\n", 
 			gai_strerror(ret));
 		free(remres);
@@ -111,14 +134,44 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		locaddr6 = (struct sockaddr_in6*)locres->ai_addr;
 
 	for (i = 0; i < index; i++) {
+
+		
+		// we need to examine the incoming address to see if it has a slash
+		// indicating that it is being masked. if so assign it to a temporary
+		// char because strtok is destructive
+		tmpip = strdup(ips[i]);
+		
+		// get the initial token
+		token = strtok(tmpip, "/");
+		
+		j = 0;
+		// we should only have at most two items 
+		// so pay attention to the NULL and the index
+		while (token != NULL && j < 2) {
+			// copy the ip into the 0th place and the mask into the 1st
+			strcpy(ip[j],token);
+			token = strtok(NULL, "/");
+			j++;
+		}
+
+		free(tmpip);		
+
+		// convert whatever we have into an int
+		bits = atoi(ip[1]);
+		// if the int is outside of the range then set it to the narrowest possible
+		if (bits < 0 || bits > 32) {
+			bits = 32;
+		}
+		
 		// go through the above for each ip address we are testing against
-		ret = getaddrinfo(ips[i], NULL, &hint, &testres);
+		ret = getaddrinfo(ip[0], NULL, &hint, &testres);
 		if (ret != 0) {
 			fprintf(stderr, "getaddrinfo: %s (likely an invalid user defined ip address)\n", 
 				gai_strerror(ret));
 			freeaddrinfo(testres);
 			goto Cleanup;
 		}
+
 		if (testres->ai_family == AF_INET)  
 			testaddr = (struct sockaddr_in*)testres->ai_addr;
 		else 
@@ -129,7 +182,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		if (locres->ai_family == testres->ai_family) {
 			// compare on either ipv4 (AF_INET) or ipv6
 			if (locres->ai_family == AF_INET) {
-				if (locaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr){
+				// match using the bits and the ints for the addresses
+				if (cidr_match(locaddr->sin_addr.s_addr, testaddr->sin_addr.s_addr, bits)) {
 					result = 0;
 					freeaddrinfo(testres);
 					goto Cleanup;
@@ -147,7 +201,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 
 		if (remres->ai_family == testres->ai_family) {
 			if (remres->ai_family == AF_INET) {
-				if (remaddr->sin_addr.s_addr == testaddr->sin_addr.s_addr){
+				if (cidr_match(remaddr->sin_addr.s_addr, testaddr->sin_addr.s_addr, bits)) {
 					result = 0;
 					freeaddrinfo(testres);
 					goto Cleanup;
@@ -166,6 +220,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 Cleanup:
 	freeaddrinfo(remres);
 	freeaddrinfo(locres);
+	free(ip[0]);
+	free(ip[1]);
 	return result;
 }
 
