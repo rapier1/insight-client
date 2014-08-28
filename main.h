@@ -42,12 +42,15 @@ typedef struct CmdLineCID {
 	UT_hash_handle hh;
 } CmdLineCID;
 
+
+
 void get_metric_mask (struct estats_mask *, char *);
 void add_cmdline_to_hash(int, char *, CmdLineCID **);
 void get_cmdline_from_cid_hash(char ** , int, CmdLineCID **);
 void delete_all_from_hash(CmdLineCID **);
 void get_connection_data (char **, struct FilterList *);
 void *analyze_inbound(libwebsock_client_state *, libwebsock_message *);
+int confirm_cid (int);
 int onmessage(libwebsock_client_state *, libwebsock_message *);
 int onopen(libwebsock_client_state *);
 int onclose(libwebsock_client_state *);

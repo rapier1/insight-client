@@ -44,8 +44,9 @@ typedef struct jsondata {
 
 typedef struct reportinfo {
 	int cid;
-	char *uri;
 	int port;
+	int persist;
+	char *uri;
 	char *db;
 	char *dbname;
 	char *dbpass;
@@ -55,9 +56,15 @@ typedef struct reportinfo {
 	char *email;
 	char *phone;
 	char *institution;
+	time_t update_time;
 } reportinfo;
 
-int report_create_from_json_string(char *);
+typedef struct reports_ll {
+	struct reportinfo *report;	
+	struct reports_ll *next;
+} reports_ll;
+
+int report_create_from_json_string(char *, struct reports_ll **);
 int report_parse (json_object *, reportinfo *);
 void report_sanitize (reportinfo *, MYSQL *);
 void report_free (reportinfo *);
@@ -65,4 +72,7 @@ int report_sql (reportinfo *, char *);
 int report_create_data_query (char *, char **, char **);
 void report_parse_json_object (json_object *, jsondata *);
 void report_parse_json_array (json_object *, char *, jsondata * );
+int report_execute (struct reportinfo *);
+int report_del_cid (int, reports_ll **);
+int report_add_cid (reportinfo *, reports_ll **);
 #endif

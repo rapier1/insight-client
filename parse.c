@@ -134,8 +134,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		locaddr6 = (struct sockaddr_in6*)locres->ai_addr;
 
 	for (i = 0; i < index; i++) {
+		j = 0; // reset the index for the ip[]
 
-		
 		// we need to examine the incoming address to see if it has a slash
 		// indicating that it is being masked. if so assign it to a temporary
 		// char because strtok is destructive
@@ -144,7 +144,6 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		// get the initial token
 		token = strtok(tmpip, "/");
 		
-		j = 0;
 		// we should only have at most two items 
 		// so pay attention to the NULL and the index
 		while (token != NULL && j < 2) {
@@ -157,6 +156,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		free(tmpip);		
 
 		// convert whatever we have into an int
+		// this is *only* for ipv4.
 		bits = atoi(ip[1]);
 		// if the int is outside of the range then set it to the narrowest possible
 		if (bits < 0 || bits > 32) {
@@ -384,7 +384,6 @@ int parse_strings(struct FilterList *filterlist, char *inbound, int loc) {
 	if ( split == NULL ) {
 		// We didn't find the delimiter between the command and list of options
 		// which is obviously odd but lets accept it for now
-		printf ("foo\n");
 		return 0;
 	}
 	log_debug("parse_strings split value: %d", mynum);

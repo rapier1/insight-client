@@ -30,7 +30,15 @@
 int debugflag = 0;
 int printjson = 0;
 
+#define INTERVAL 180
+
 MMDB_s geoipdb; //define the db handle as a global. possibly bad form but we can revist
+
+/* we have to define the report_list linked list as global because the callback
+ * for websocket doesn't give us anyway to pass extra variables. That's our only entry
+ * into analyzing the inbound message. Not happy about this.
+ */
+reports_ll *report_list_head = NULL;
 
 
 void get_metric_mask (struct estats_mask *mask, char *maskstring) {
@@ -191,10 +199,20 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			request = parse_string_to_enum(filterlist->commands[i]);
 			// what sort of data filtering will we be using
 			switch (request) {
+			case list:
+				break;
 			case exclude: 
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				flag = exclude_port(sport, dport, filterlist->ports[i], 
+						filterlist->arrindex[i]);
+				break;
+			case filterip:
+				flag = filter_ips(asc.local_addr, asc.rem_addr, 
+						filterlist->strings[i], filterlist->arrindex[i]);
+				break;
+			case appinclude:
+				flag = include_app(appname, filterlist->strings[i], 
 						filterlist->arrindex[i]);
 				break;
 			case include:
@@ -204,23 +222,13 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 				flag = include_port(sport, dport, filterlist->ports[i], 
 						filterlist->arrindex[i]);
 				break;
-			case filterip:
-				flag = filter_ips(asc.local_addr, asc.rem_addr, 
-						filterlist->strings[i], filterlist->arrindex[i]);
-				break;
-			case report:
-				if (filterlist->reportcid != atoi(asc.cid)) 
-					flag = 1;
-				break;
-			case appinclude:
-				flag = include_app(appname, filterlist->strings[i], 
-						filterlist->arrindex[i]);
-				break;
 			case appexclude:
 				flag = exclude_app(appname, filterlist->strings[i], 
 						filterlist->arrindex[i]);
 				break;
-			case list:
+			case report:
+				if (filterlist->reportcid != atoi(asc.cid)) 
+					flag = 1;
 				break;
 			default:
 				break;
@@ -277,21 +285,18 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			if (tcpdata->val[i].masked) 
 				continue;
 
-			// this switch is likely unnecessary as all estat ints are cast to 
-			// int64 however, just to be on the safe side I've implemented this
+			// there is an UNSIGNED16 defined but no values make use of it
+			// case statements in order of frequency
 			json_object *estats_val = NULL;
 			switch(estats_var_array[i].valtype) {
-			case ESTATS_UNSIGNED64:
-				estats_val = json_object_new_int64(tcpdata->val[i].uv64);
-				break;
 			case ESTATS_UNSIGNED32:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv32);
 				break;
 			case ESTATS_SIGNED32:
 				estats_val = json_object_new_int64(tcpdata->val[i].sv32);
 				break;
-			case ESTATS_UNSIGNED16:
-				estats_val = json_object_new_int64(tcpdata->val[i].uv16);
+			case ESTATS_UNSIGNED64:
+				estats_val = json_object_new_int64(tcpdata->val[i].uv64);
 				break;
 			case ESTATS_UNSIGNED8:
 				estats_val = json_object_new_int64(tcpdata->val[i].uv8);
@@ -310,11 +315,12 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	}
 	json_object_object_add(jsonout, "DATA", data_array); 
 
-	// convert the json object to a string
-	// we use JSON_C_TO_STRING_PRETTY becaus the data may be sent to stdout
-	// and the UI doesn't care
-	*message = malloc(strlen(json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY)+1) * sizeof(*message));
-	strcpy(*message, (char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY));
+	// if they want the json string sent to stdout then make it pretty otherwise 
+	// skip the extra characters. The UI should handle it either way without a problem
+	if (printjson)
+		*message = strdup((char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PRETTY));
+	else
+		*message = strdup((char *)json_object_to_json_string_ext(jsonout, JSON_C_TO_STRING_PLAIN));
 
 	log_info("%s\n", *message);
 	log_debug("Processed %d of %d connections", shownconn, maxconn);
@@ -330,6 +336,42 @@ Cleanup:
 		PRINT_AND_FREE(err);
 	}
 	return;
+}
+
+/* Before we go through the process of getting the data we
+ * need to make sure the CID exists in the current list of connections
+ */
+int confirm_cid (int cid) {
+	struct estats_error* err = NULL;
+	struct estats_nl_client* cl = NULL;
+	struct estats_connection_list* clist = NULL;
+	struct estats_connection* cp = NULL;
+	struct estats_connection_tuple_ascii asc;
+	int myerr = 0;
+
+	// get a list of the connections available
+	Chk(estats_nl_client_init(&cl)); //init the netlink client
+	Chk(estats_connection_list_new(&clist)); //create a new connection list
+	Chk(estats_list_conns(clist, cl)); // fill the connection list with cid data
+
+	// step through the list of connections
+	list_for_each(&clist->connection_head, cp, list) {
+		struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
+
+		// need to use different CHK routine to just go to 
+		// Continue rather than Cleanup
+		Chk2Ign(estats_connection_tuple_as_strings(&asc, ct));
+		if (atoi(asc.cid) == cid) {
+			myerr = 1;
+			goto Cleanup;
+		}
+	Continue:
+		while (0) {}
+	}
+Cleanup:
+	estats_connection_list_free(&clist);
+	estats_nl_client_destroy(&cl);
+	return myerr;
 }
 
 // figure out what we are doing with the incoming requests
@@ -382,6 +424,15 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 	comlist->maxindex = 0;
 	parse_json(json_in, comlist);
 
+	if (comlist->maxindex == 0 ) {
+		// they sent an empty command list. most likely they 
+		// just sent a 'mask' line so we'll assume they want a 
+		// 'list'
+		comlist->maxindex = 1;
+		comlist->commands[0] = strdup("list");
+		comlist->options[0] = strdup("n/a");
+	}
+
 	if (debugflag) {
 		for (i = 0; i < comlist->maxindex; i++) {
 			log_debug("[%d]command: %s", i, comlist->commands[i]);
@@ -392,7 +443,9 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 
 	if (strcmp(comlist->commands[0], "report") == 0) {
 		char *response;
-		if(report_create_from_json_string(comlist->options[0]) != 1){
+		// TODO the reporting system needs to be changed in order to 
+		// reflect the new options
+		if(report_create_from_json_string(comlist->options[0], &report_list_head) != 1){
 			//create a special json string to indicate that there
 			//was an error with the attempt to make a report
 			response = "{\"function\":\"report\", \"result\":\"failure\"}";
@@ -412,6 +465,34 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		goto Cleanup;
 	}
 
+	// if the linked list exists step through it
+	if (report_list_head != NULL) {
+		struct reports_ll *curr = report_list_head;
+		struct timeval time_s;
+		time_t cur_sec;
+		gettimeofday(&time_s, NULL);
+		cur_sec = time_s.tv_sec;
+		while (curr != NULL) {
+			// only send a report to the DB if we've exceeded the defined reporting interval
+			if (cur_sec - curr->report->update_time > INTERVAL) {
+				printf ("Examining CID: %d\n", curr->report->cid);
+				if (confirm_cid(curr->report->cid)) {
+					if (report_execute(curr->report) == 1) {
+						curr->report->update_time = cur_sec;
+						printf("executed\n");
+						/* TODO send the UI a notice that the report was sent */
+					}
+				} else {
+					/* the cid no long exists so we should remove it from the linked list */
+					if (report_del_cid(curr->report->cid, &report_list_head) == 1) {
+						printf ("CID not found, removed from linked list\n");
+						/* TODO send the UI a notice that this has happened */
+					}
+				}
+			}
+			curr = curr->next;
+		}
+	}
 
 	// filterlist is what we will be using to, ya know, filter the data. 
 	filterlist = malloc(sizeof(FilterList));

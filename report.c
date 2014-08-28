@@ -19,12 +19,74 @@
 #include <string.h>
 #include "report.h"
 
+/* add a cid to the struct we use to monitor the connections we are reporting on */
+int report_add_cid (reportinfo *report, struct reports_ll **report_list_head) {
+	printf ("in report_add_cid\n");
+	struct reports_ll *curr;
+	curr = *report_list_head;
+	// initialize the list if we don't have anything in it already
+	if (curr == NULL) {
+		printf ("curr address is %p\n", curr);
+		curr = (struct reports_ll *)malloc(sizeof(struct reports_ll));
+		curr->report = report;
+		curr->next = NULL;
+		*report_list_head = curr;
+		printf ("creating initial linked list at %p\n", report_list_head);
+		return 1;
+	}
+	// go to the end of the list
+	while (curr->next != NULL)
+		curr = curr->next;
+	curr->next = (struct reports_ll *)malloc(sizeof(struct reports_ll));
+	curr->next->report = report;
+	curr->next->next = NULL;
+	printf ("curr %p curr->next %p\n", curr, curr->next);
+	return 1;
+}
+
+
+/* remove the cid from the struct we are using to hold the connections we are
+ reporting on */
+int report_del_cid (int cid, reports_ll **report_list_head) {
+	struct reports_ll *curr = *report_list_head;
+	struct reports_ll *prev = NULL;
+	struct reports_ll *next = NULL;
+	struct reports_ll *del = NULL;
+	if (curr == NULL) // nothing to delete
+		return 1;
+	while (curr != NULL) {
+		next = curr->next;
+		printf ("next is %p\n", next);
+		if (curr->report->cid == cid) {
+			printf ("found cid in linked list\n");
+			if (prev == NULL) // we are deleting the head of the list
+				*report_list_head = next;
+			else
+				prev->next = next;
+			del = curr;
+		}
+		printf ("prev1 %p, curr1 %p, next1 %p\n", prev, curr, next);
+		prev = curr;
+		curr = next;
+		printf ("prev2 %p, curr2 %p, next2 %p\n", prev, curr, next);
+	}
+	if (del != NULL) {
+		printf ("freeing report and node at %p\n", del);
+		report_free(del->report);
+		free(del);
+	}
+	return 1;
+}
+
+
 int report_parse (json_object *json_in, reportinfo *report) {
+	struct timeval time_s;
 	// initialize the report structure
 	// if they don't pass something we need to be able to know
 	report->cid = 0;
 	report->uri = "\0";
 	report->port = 0;
+	report->persist = 0;
 	report->lname = "\0";
 	report->fname = "\0";
 	report->email = "\0";
@@ -34,6 +96,8 @@ int report_parse (json_object *json_in, reportinfo *report) {
 	report->nocemail = "\0";
 	report->institution = "\0";
 	report->phone = "\0";
+	gettimeofday(&time_s, NULL);
+	report->update_time = time_s.tv_sec; // used to determine when to send reports to the DB
 	enum json_type type;
 	json_object_object_foreach (json_in, key, val) {
 		type = json_object_get_type(val);
@@ -53,6 +117,10 @@ int report_parse (json_object *json_in, reportinfo *report) {
 		}
 		if (strcmp(key, "port") == 0) {
 			report->port = json_object_get_int(val);
+			continue;
+		}
+		if (strcmp(key, "persist") == 0) {
+			report->persist = json_object_get_int(val);
 			continue;
 		}
 		if (strcmp(key, "fname") == 0) {
@@ -454,8 +522,6 @@ int report_create_data_query (char* request, char** dq_string, char** fq_string)
 	// parse the object and place the tuple information in fq_string and the 
 	// data into dq_string
 	json_result = malloc(sizeof(jsondata));
-	//json_result->key_arr = malloc(sizeof(json_result->key_arr));
-	//json_result->val_arr = malloc(sizeof(json_result->val_arr));
 	json_result->idx = 0;
 	report_parse_json_object(json_in, json_result);
 
@@ -565,10 +631,8 @@ void report_parse_json_object (json_object *json_in, jsondata *json_result) {
 
 // basically takes the incoming string and runs it through the rest of the functions to 
 // create the report and send it. 
-int report_create_from_json_string (char *incoming) {
+int report_create_from_json_string (char *incoming, reports_ll **report_list_head) {
 	struct reportinfo *report;
-	struct FilterList *filterlist;
-	char *message;
 	json_tokener *tok = json_tokener_new();
 	json_object *json_in = NULL;
 	enum json_tokener_error jerr;
@@ -603,6 +667,35 @@ int report_create_from_json_string (char *incoming) {
 		json_tokener_free(tok);
 		return -1;
 	}
+	
+	printf ("report->persist is %d\n", report->persist);
+
+	// add the report to the linked list
+	if (report->persist > 0) {
+		if (report_add_cid(report, report_list_head))
+			// need to send the initial report
+			myerr = report_execute (report);
+	}
+	// remove the report from the linked list
+	if (report->persist < 0) 
+		myerr = report_del_cid(report->cid, report_list_head);
+	// they only want a single report
+	if (!report->persist || report->persist == 0) {
+		myerr = report_execute(report);
+		report_free(report);
+	}
+
+	json_object_put(json_in);
+	json_tokener_free(tok);
+	return myerr;
+}
+
+
+
+int report_execute (struct reportinfo *report) {
+	int myerr = 0;
+	struct FilterList *filterlist;
+	char *message;
 
 	// filterlist needs the report command, cid, mask, and index size (always 1)
 	filterlist = malloc(sizeof(struct FilterList));
@@ -632,15 +725,10 @@ int report_create_from_json_string (char *incoming) {
 	}
 
 	myerr = 1;
-	report_free(report);
 Cleanup:
 	free(filterlist->commands[0]);
 	free(filterlist->mask);
 	free(filterlist);
-	json_object_put(json_in);
-	json_tokener_free(tok);
 	free(message);
 	return myerr;
 }
-
-
