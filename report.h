@@ -46,6 +46,7 @@ typedef struct reportinfo {
 	int cid;
 	int port;
 	int persist;
+	int interval;
 	char *uri;
 	char *db;
 	char *dbname;

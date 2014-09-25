@@ -409,7 +409,7 @@ void parse_comlist (struct CommandList *comlist, struct FilterList *filterlist) 
 	for (i = 0; i < max; i++) {
 		request = parse_string_to_enum(comlist->commands[i]);
 		filterlist->commands[i] = strdup(comlist->commands[i]);
-		if (request == -1) // couldn't map the command to the enum so ignore
+		if (!request) // couldn't map the command to the enum so ignore
 			continue;
 		switch (request) {
 		case exclude:
@@ -451,5 +451,5 @@ RequestTypes parse_string_to_enum( const char *s ) {
             return map[i].e;
         }
     }
-    return -1;
+    return false;
 }

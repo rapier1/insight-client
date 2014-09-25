@@ -84,9 +84,10 @@ int report_parse (json_object *json_in, reportinfo *report) {
 	// initialize the report structure
 	// if they don't pass something we need to be able to know
 	report->cid = 0;
-	report->uri = "\0";
 	report->port = 0;
 	report->persist = 0;
+	report->interval = 0;
+	report->uri = "\0";
 	report->lname = "\0";
 	report->fname = "\0";
 	report->email = "\0";
@@ -108,6 +109,10 @@ int report_parse (json_object *json_in, reportinfo *report) {
 		}
 		if (strcmp(key, "cid") == 0 ) {
 			report->cid = json_object_get_int(val);
+			continue;
+		} 
+		if (strcmp(key, "interval") == 0 ) {
+			report->interval = json_object_get_int(val);
 			continue;
 		} 
 		if (strcmp(key, "uri") == 0) {
@@ -307,7 +312,6 @@ int report_sql(reportinfo* report, char* message) {
 			if (mysql_real_query(con, query, (unsigned int)strlen(query)) != 0) {
 				// error
 				fprintf(stderr, "%s\n%s\n", mysql_error(con), query);
-				free(flow_query_str);
 				return -1;
 			}
 			uid_result = mysql_store_result(con);

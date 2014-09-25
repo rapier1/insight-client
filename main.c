@@ -470,11 +470,16 @@ void *analyze_inbound(libwebsock_client_state *state, libwebsock_message *msg)
 		struct reports_ll *curr = report_list_head;
 		struct timeval time_s;
 		time_t cur_sec;
+		int update_interval;
 		gettimeofday(&time_s, NULL);
 		cur_sec = time_s.tv_sec;
 		while (curr != NULL) {
 			// only send a report to the DB if we've exceeded the defined reporting interval
-			if (cur_sec - curr->report->update_time > INTERVAL) {
+			if (curr->report->interval <= 0) 
+				update_interval = INTERVAL;
+			else 
+				update_interval = curr->report->interval;
+			if (cur_sec - curr->report->update_time > update_interval) {
 				printf ("Examining CID: %d\n", curr->report->cid);
 				if (confirm_cid(curr->report->cid)) {
 					if (report_execute(curr->report) == 1) {
@@ -636,12 +641,13 @@ onclose(libwebsock_client_state *state)
 int main(int argc, char *argv[])
 {
 	libwebsock_context *wssocket = NULL;
+	char* ip = "127.0.0.1";
 	char* port = "9000";
 	char* geoippath = "/usr/local/share/GeoIP/GeoLite2-City.mmdb";
 	int opt;
 	mysql_library_init(0, NULL, NULL);
 
-	while ((opt = getopt(argc, argv, "hp:g:dj")) != -1) {
+	while ((opt = getopt(argc, argv, "hp:g:b:dj")) != -1) {
 		switch (opt) {
 		case 'h':
 			usage();
@@ -659,6 +665,9 @@ int main(int argc, char *argv[])
 		case 'j':
 			printjson = 1;
 			break;
+		case 'b':
+			ip = optarg;
+			break;
 		default:
 			usage();
 			exit(EXIT_FAILURE);
@@ -672,7 +681,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Error during libwebsock_init.\n");
 		exit(1);
 	}
-	libwebsock_bind(wssocket, "127.0.0.1", port);
+	libwebsock_bind(wssocket, ip, port);
 	fprintf(stderr, "Insight listening on port %s\n", port);
 
 	// initialize the geoip database
