@@ -24,7 +24,7 @@
         do {								\
                 err = (x);                                              \
                 if (err != NULL) {                                      \
-                        dbgprintf("   ... saw error \"%s\" (error code %d) at %s:%d in function %s (\"%s\")\n", \
+                        printf("   ... saw error \"%s\" (error code %d) at %s:%d in function %s (\"%s\")\n", \
                                   estats_error_get_message(err),        \
                                   estats_error_get_number(err),         \
                                   __FILE__,                             \

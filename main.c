@@ -167,7 +167,7 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 	// step through the list of clients
 	list_for_each(&clist->connection_head, cp, list) {
 		maxconn++; // total number of connections processed including skipped connections
-		struct estats_connection_tuple* ct = (struct estats_connection_tuple*) cp;
+		struct estats_connection_tuple* ct = (struct estats_connection_tuple*) &(cp->rem_addr[0]);
 
 		// need to use different CHK routine to just go to 
 		// Continue rather than Cleanup
@@ -201,33 +201,33 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 			switch (request) {
 			case list:
 				break;
-			case exclude: 
+			case exclude:
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
-				flag = exclude_port(sport, dport, filterlist->ports[i], 
+				flag = exclude_port(sport, dport, filterlist->ports[i],
 						filterlist->arrindex[i]);
 				break;
 			case filterip:
-				flag = filter_ips(asc.local_addr, asc.rem_addr, 
+				flag = filter_ips(asc.local_addr, asc.rem_addr,
 						filterlist->strings[i], filterlist->arrindex[i]);
 				break;
 			case appinclude:
-				flag = include_app(appname, filterlist->strings[i], 
+				flag = include_app(appname, filterlist->strings[i],
 						filterlist->arrindex[i]);
 				break;
 			case include:
 				dport = atoi(asc.rem_port);
 				sport = atoi(asc.local_port);
 				// return 0 *if* the dport or sport is in our list of included ports
-				flag = include_port(sport, dport, filterlist->ports[i], 
+				flag = include_port(sport, dport, filterlist->ports[i],
 						filterlist->arrindex[i]);
 				break;
 			case appexclude:
-				flag = exclude_app(appname, filterlist->strings[i], 
+				flag = exclude_app(appname, filterlist->strings[i],
 						filterlist->arrindex[i]);
 				break;
 			case report:
-				if (filterlist->reportcid != atoi(asc.cid)) 
+				if (filterlist->reportcid != atoi(asc.cid))
 					flag = 1;
 				break;
 			default:
