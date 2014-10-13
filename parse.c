@@ -94,7 +94,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 	char *ip[2];
 	char *token;
 	char *tmpip;
-	int bits;
+	int bits = 32; // the default mask if they don't include a mask
 
 	ip[0] = malloc(100); // ipaddress oversized because maybe we do ipv6 at some point? 
 	ip[1] = malloc(20); // mask
@@ -159,7 +159,8 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		// this is *only* for ipv4.
 		bits = atoi(ip[1]);
 		// if the int is outside of the range then set it to the narrowest possible
-		if (bits < 0 || bits > 32) {
+		// as you can see we aren't supporting a /0 mask. TODO: fix it so we can. 
+		if (bits == 0 || bits > 32) {
 			bits = 32;
 		}
 		
@@ -168,8 +169,7 @@ int filter_ips( char* local, char* remote, char** ips, int index) {
 		if (ret != 0) {
 			fprintf(stderr, "getaddrinfo: %s (likely an invalid user defined ip address)\n", 
 				gai_strerror(ret));
-			freeaddrinfo(testres);
-			goto Cleanup;
+			continue;
 		}
 
 		if (testres->ai_family == AF_INET)  
