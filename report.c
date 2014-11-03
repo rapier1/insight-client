@@ -609,10 +609,10 @@ void report_parse_json_object (json_object *json_in, jsondata *json_result) {
 			} else {
 				// don't want either of these in the final data
 				// may change our mind though
-				if (strcmp(key, "lat") == 0)
-					continue;
-				if (strcmp(key, "long") == 0)
-					continue;
+				//if (strcmp(key, "lat") == 0)
+				//	continue;
+				//if (strcmp(key, "long") == 0)
+				//	continue;
 				sprintf(value, "'%s'", (char *)json_object_get_string(val));
 				json_result->key_arr[json_result->idx] = malloc(strlen(key)+1 * sizeof(char));
 				strcpy(json_result->key_arr[json_result->idx], key);

@@ -273,11 +273,21 @@ void get_connection_data (char **message, struct FilterList *filterlist) {
 		double latitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "latitude");
 		double longitude = geoip_lat_or_long(asc.rem_addr, geoipdb, "longitude");
 
+		double local_lat = geoip_lat_or_long(asc.local_addr, geoipdb, "latitude");
+		double local_long = geoip_lat_or_long(asc.local_addr, geoipdb, "longitude");
+
 		json_object *jlat = json_object_new_double(latitude);
 		json_object *jlong = json_object_new_double(longitude);
 
-		json_object_object_add(connection_data, "lat", jlat);
-		json_object_object_add(connection_data, "long", jlong);
+		json_object *jloc_lat = json_object_new_double(local_lat);
+		json_object *jloc_long = json_object_new_double(local_long);
+
+		json_object_object_add(connection_data, "rem_lat", jlat);
+		json_object_object_add(connection_data, "rem_long", jlong);
+
+		json_object_object_add(connection_data, "loc_lat", jloc_lat);
+		json_object_object_add(connection_data, "loc_long", jloc_long);
+
 
 		// step through each element of the tcpdata
 		// and append it to json list that we appened back on to the head node
